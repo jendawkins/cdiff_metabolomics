@@ -65,7 +65,7 @@ source activate dispatcher
 
 
 cd /PHShome/jjd65/CDIFF/
-python3 ./main_nets.py -l {0}
+python3 ./main_nets.py
 '''
 
 # Make the directories to store the information
