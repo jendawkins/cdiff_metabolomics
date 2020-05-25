@@ -7,8 +7,8 @@ import argparse
 my_str = '''
 #!/bin/bash
 #BSUB -J pylab
-#BSUB -o {3}.out
-#BSUB -e {3}.err
+#BSUB -o fl.out
+#BSUB -e fl.err
 
 # This is a sample script with specific resource requirements for the
 # **bigmemory** queue with 64GB memory requirement and memory
@@ -65,7 +65,7 @@ source activate dispatcher
 
 
 cd /PHShome/jjd65/CDIFF/
-python3 ./main_nets.py -o {0}
+python3 ./main.py -o {0}
 '''
 
 # Make the directories to store the information

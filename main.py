@@ -58,6 +58,12 @@ def main(path, ml, lambdas, inner_fold = True, optim_param = 'auc'):
             results_dict[dkey]['metabs1'] = []
             results_dict[dkey]['metabs2'] = []
             results_dict[dkey]['outer_run'] = []
+
+            if reg is not None:
+                fig2, ax2 = plt.subplots(1,outer_loops, figsize = (50,20))
+                fig2.suptitle('Weight ' + str(ww) + ', regularization l' + str(reg), fontsize = 40)
+                
+
             for i in range(outer_loops):
                 net = LogRegNet(ml.data_dict[dattype].shape[1])
                 # net, epochs, labels, data, folds=3, regularizer=None, weighting=True, lambda_grid=None
@@ -86,21 +92,19 @@ def main(path, ml, lambdas, inner_fold = True, optim_param = 'auc'):
                 results_dict[dkey]['metabs2'].append(
                     pd.DataFrame(metabs2, vals2))
                 results_dict[dkey]['outer_run'].append(outer_run)
-
+                # import pdb; pdb.set_trace()
                 if inner_dic is not None:
                     for k in inner_dic.keys():
-                        fig2, ax2 = plt.subplots(
-                            1, outer_loops, figsize=(50, 20))
-                        fig2.suptitle('Weight ' + str(ww) +
-                              ', regularization l' + str(reg), fontsize=40)
                         ax2[i].scatter([k]*len(inner_dic[k]),
                                     inner_dic[k], s=150)
                         ax2[i].set_xlabel('lambda values', fontsize=30)
                         ax2[i].set_ylabel(optim_param.capitalize(), fontsize=30)
                         ax2[i].set_xscale('log')
                         ax2[i].set_title('Outer Fold ' + str(i), fontsize=30)
+                        if optim_param == 'auc':
+                            ax2[i].set_ylim(0,1)
 
-                    fig2.savefig(optim_param + '_lambdas_w' + str(ww) + '_l' + str(reg) + '.png')
+                    # fig2.savefig(optim_param + '_lambdas_w' + str(ww) + '_l' + str(reg) + '.png')
                 fpr, tpr, _ = roc_curve(y_true, y_guess[:, 1].squeeze())
                 roc_auc = auc(fpr, tpr)
                 if i != 0:
@@ -124,6 +128,7 @@ def main(path, ml, lambdas, inner_fold = True, optim_param = 'auc'):
 
             auc_all.append(np.mean(auc_vec))
             auc_all_std.append(np.std(auc_vec))
+            fig2.savefig(optim_param + '_lambdas_w' + str(ww) + '_l' + str(reg) + '.png')
 
             if dattype == 'week_one':
                 ax[ii, jj].set_title('ROC Curves, Week 1, Eventual Reurrence' + reglab +
@@ -168,7 +173,7 @@ if __name__ == "__main__":
     cd.make_pt_dict(cd.cdiff_raw)
     filt_out = cd.filter_metabolites(40)
 
-    lambda_vector = np.logspace(-6,4,num = 100)
+    lambda_vector = np.logspace(-3, 2, num = 50)
 
     parser.add_argument("-o", "--optim_type", help="type of lambda optimization", type=str)
     args = parser.parse_args()
@@ -177,4 +182,4 @@ if __name__ == "__main__":
     ml = mlMethods(cd.pt_info_dict, lag=1)
     ml.path = path
 
-    main(path, ml, lambda_vector, args.optim_type)
+    main(path, ml, lambda_vector, inner_fold = True, optim_param = args.optim_type)
