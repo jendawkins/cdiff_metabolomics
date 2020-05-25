@@ -25,7 +25,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.tensor as T
-
+from sklearn.metrics import roc_curve, auc, roc_auc_score
 
 class Net(nn.Module):
     def __init__(self, num_mols, hidden_size):
@@ -347,12 +347,10 @@ class mlMethods():
         else:
             return data[ix_train, :], labels[ix_train], data[ix_out], labels[ix_out], ix_train, ix_out
 
-    def pca_func(self,x=None,targets=None,n=2):
+    def pca_func(self,x,targets,n=2):
+        x = (x - np.min(x, 0))/(np.max(x, 0) - np.min(x, 0))
         pca = PCA(n_components=n)
-        if targets is None:
-            targets = self.targets_dict[1.0]
-        else:
-            targets = (np.array(targets) == 'Recur').astype('float')
+        targets = (np.array(targets) == 'Recur').astype('float')
         if x.shape[0] <= 55:
             title_name = 'Week 1'
         else:
@@ -381,7 +379,9 @@ class mlMethods():
                     finalDf.loc[indicesToKeep, 'principal component 2'], c=color, s=50)
         ax.legend(targets)
         ax.grid()
+        # return fig, ax
         fig.savefig(self.path + title_name.replace(' ','') + 'pca.pdf')
+
 
     def rank_sum(self,x,targets,cutoff = .05):
         targets = (np.array(targets) == 'Recur').astype('float')
@@ -607,32 +607,23 @@ class mlMethods():
         b[np.arange(a.shape[0]), a] = 1
         return torch.Tensor(b)
 
-    def train_net(self, net, epochs, labels, data, folds=3, regularizer=None, weighting=True, lambda_grid=None):
+    def train_net(self, net, epochs, labels, data, plot = True, folds = 3, shuffle = False, data_type = 'week_one', regularizer = None, weighting = True, lambda_grid=None, train_inner = True, optimization = 'auc'):
         # OUTER TRAIN TEST SPLIT
-        TRAIN, TRAIN_L, TEST, TEST_L = self.split_test_train(
-            data, labels, all_data=isinstance(data, dict))
-
-        TRAIN, TRAIN_L, TEST, TEST_L = torch.FloatTensor(TRAIN), torch.DoubleTensor(TRAIN_L), torch.FloatTensor(TEST), torch.DoubleTensor(TEST_L)
-        optimizer = torch.optim.RMSprop(net.parameters(), lr=.0001)
-
-        if lambda_grid is None:
-            assert regularizer==None 
-
-        if regularizer is not None:
-            skf = StratifiedKFold(n_splits=folds, shuffle=False)
-            inner_loss = dict()
+        TRAIN, TRAIN_L, TEST, TEST_L = self.split_test_train(data,labels, all_data = isinstance(data, dict))
+        TRAIN, TRAIN_L, TEST, TEST_L = torch.FloatTensor(TRAIN), torch.DoubleTensor(
+            TRAIN_L), torch.FloatTensor(TEST), torch.DoubleTensor(TEST_L)
+        optimizer = torch.optim.RMSprop(net.parameters(),lr = .0001)
+        
+        if regularizer is not None and train_inner:
+            skf = StratifiedKFold(n_splits=folds, shuffle= shuffle)
+            inner_dic = dict()
             # INNER TRAIN TEST SPLIT
             for train_index, test_index in skf.split(TRAIN, TRAIN_L):
-                X_train, X_test = TRAIN[train_index, :], TRAIN[test_index, :]
+                X_train, X_test = TRAIN[train_index,:], TRAIN[test_index,:]
                 y_train, y_test = TRAIN_L[train_index], TRAIN_L[test_index]
-                running_loss = []
                 test_running_loss = []
-                trainacc = []
-                testacc = []
-                trainf1 = []
-                testf1 = []
-
-                net_vec_sm = []
+                running_auc = []
+                running_f1 = []
 
                 y_guess = []
                 y_true = []
@@ -640,16 +631,14 @@ class mlMethods():
 
                 if weighting:
                     weights = len(y_train) / (2 * np.bincount(y_train))
-                    criterion = nn.BCEWithLogitsLoss(
-                        pos_weight=torch.Tensor(weights))
+                    criterion = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor(weights))
 
                 else:
                     criterion = nn.BCEWithLogitsLoss()
-
+                
                 for lamb in lambda_grid:
-
+                    
                     # INNER FOLD!!!
-                    auc_vec = []
                     for epoch in range(epochs):
                         net.train()
                         optimizer.zero_grad()
@@ -664,79 +653,127 @@ class mlMethods():
                             else:
                                 l2_reg = l2_reg + W.norm(regularizer)
 
-                        loss = criterion(out, self.make_one_hot(
-                            y_train, 2)) + reg_lambda * l2_reg
+                        loss = criterion(out, self.make_one_hot(y_train,2)) + reg_lambda * l2_reg
 
                         loss.backward()
                         optimizer.step()
+                        
+                        
                         net.eval()
                         test_out = net(X_test).double()
-                        test_loss = criterion(test_out, self.make_one_hot(y_test, 2))
+                        
+                        test_loss = criterion(test_out, self.make_one_hot(y_test,2))
 
                         test_out_sig = torch.sigmoid(test_out)
+                        
+                        y_guess = test_out_sig.detach().numpy()
+                        fpr, tpr, _ = roc_curve(y_test, y_guess[:,1].squeeze())
+                        roc_auc = auc(fpr, tpr)
 
+                        y_pred = np.argmax(y_guess, 1)
+
+                        f1 = sklearn.metrics.f1_score(y_test, y_pred)
+                        
                         test_running_loss.append(test_loss.item())
+                        running_auc.append(roc_auc)
+                        running_f1.append(f1)
 
-                        if epoch > 50 and test_running_loss[-1] > test_running_loss[-2] and test_running_loss[-2] > test_running_loss[-3] and test_running_loss[-3] > test_running_loss[-4]:
+                        if optimization == 'auc':
+                            running_vec = running_auc
+                        elif optimization == 'f1':
+                            running_vec = running_f1
+                        elif optimization == 'loss':
+                            running_vec = test_running_loss
+
+                        bool_test = np.array([r1 <= r2 for r1, r2 in zip(running_vec[-10:],running_vec[-11:-1])]).all()
+                        
+                        if epoch > 50 and bool_test:
                             break
-                    if lamb not in inner_loss.keys():
-                        inner_loss[lamb] = [test_running_loss[-4]]
+                    if lamb not in inner_dic.keys():
+                        inner_dic[lamb] = [running_vec[-11]]
                     else:
-                        inner_loss[lamb].append(test_running_loss[-4])
-
-            max_val = np.max([np.median(it) for it in inner_loss.values()])
-            best_lambda = [k for k, v in inner_loss.items()
-                        if max_val in set(v)]
-            if isinstance(best_lambda,list) and len(best_lambda)==1:
-                best_lambda = best_lambda[0]
-            else:
-                import pdb; pdb.set_trace()
+                        inner_dic[lamb].append(running_vec[-11])
+                    
+            max_val = np.max([np.median(it) for it in inner_dic.values()])
+            best_lambda = [k for k,v in inner_dic.items() if max_val in set(v)][0]
+            # print('Best Lambda = ' + str(best_lambda) + ', For weight ' + str(weighting) + 'and l'+ str(regularizer))
         else:
-            best_lambda = 0
-            inner_loss = None
-
+            if regularizer is None:
+                best_lambda = 0
+            elif regularizer is not None and not train_inner:
+                assert(isinstance(lambda_grid, float))
+                best_lambda = lambda_grid
+            inner_dic = None
+            
         if weighting:
-            #             amt = np.array([len(np.where(y_train == l)[0]) for l in y_train])
+    #             amt = np.array([len(np.where(y_train == l)[0]) for l in y_train])
             weights = len(TRAIN_L) / (2 * np.bincount(TRAIN_L))
             criterion = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor(weights))
 
         else:
             criterion = nn.BCEWithLogitsLoss()
-
+                
         # TRAIN OUTER FOLD
         y_guess = []
         test_running_loss = []
+        running_auc = []
+        running_f1 = []
+        net_vec = []
+        net.apply(self.init_weights)
         for epoch in range(epochs):
             net.train()
             optimizer.zero_grad()
             out = net(TRAIN).double()
 
             reg_lambda = best_lambda
-            l2_reg = None
-            for W in net.parameters():
-                if l2_reg is None:
-                    l2_reg = W.norm(regularizer)
-                else:
-                    l2_reg = l2_reg + W.norm(regularizer)
-
-            loss = criterion(out, self.make_one_hot(TRAIN_L, 2)) + reg_lambda * l2_reg
+            if regularizer is not None:
+                l2_reg = None
+                for W in net.parameters():
+                    if l2_reg is None:
+                        l2_reg = W.norm(regularizer)
+                    else:
+                        l2_reg = l2_reg + W.norm(regularizer)
+            else:
+                l2_reg = 0
+            loss = criterion(out, self.make_one_hot(TRAIN_L,2)) + reg_lambda * l2_reg
 
             loss.backward()
             optimizer.step()
 
             net.eval()
             test_out = net(TEST).double()
-            test_loss = criterion(test_out, self.make_one_hot(TEST_L, 2))
+            test_loss = criterion(test_out, self.make_one_hot(TEST_L,2))
 
             test_out_sig = torch.sigmoid(test_out)
             y_guess.append(test_out_sig.detach().numpy())
 
             test_running_loss.append(test_loss.item())
+            net_vec.append(net)
 
-            if epoch > 50 and test_running_loss[-1] > test_running_loss[-2] and test_running_loss[-2] > test_running_loss[-3] and test_running_loss[-3] > test_running_loss[-4]:
+            # calc auc
+            fpr, tpr, _ = roc_curve(TEST_L, y_guess[-1][:,1].squeeze())
+            roc_auc = auc(fpr, tpr)
+            # calck f1 score
+            y_pred = np.argmax(y_guess[-1],1)
+            
+            f1 = sklearn.metrics.f1_score(TEST_L, y_pred)
+
+            running_auc.append(roc_auc)
+            running_f1.append(f1)
+            
+            if optimization == 'auc':
+                running_vec = running_auc
+            elif optimization =='f1':
+                running_vec = running_f1
+            elif optimization == 'loss':
+                running_vec = test_running_loss
+
+            bool_test = np.array([r1 <= r2 for r1, r2 in zip(running_vec[-10:],running_vec[-11:-1])]).all()
+            
+            if epoch > 50 and bool_test:
                 break
-
-        y_guess_fin = y_guess[-4]
+        net_out = net_vec[-11]
+        y_guess_fin = y_guess[-11]
         y_true = TEST_L
 
-        return inner_loss, y_guess_fin, y_true
+        return inner_dic, y_guess_fin, y_true, net_out, best_lambda, running_vec

@@ -6,9 +6,10 @@ import sklearn
 from sklearn.metrics import roc_curve, auc, roc_auc_score
 import argparse
 import pickle
+import os
 
 
-def main(path, ml, lambdas):
+def main(path, ml, lambdas, inner_fold = True, optim_param = 'auc'):
 
     epochs = 1000
 
@@ -37,6 +38,10 @@ def main(path, ml, lambdas):
     for ii, reg in enumerate(reg_vec):
         for jj, ww in enumerate(weight_vec):
 
+            if isinstance(lambdas, dict):
+                lambda_in = lambdas['w'+ str(ww) + '_l' + str(reg)]
+            else:
+                lambda_in = lambdas
             if dattype == 'all_data':
                 data_in = ml.new_info_dict
             else:
@@ -45,24 +50,20 @@ def main(path, ml, lambdas):
             dkey = str(ww) + '_' + str(reg)
             results_dict[dkey] = {}
             auc_vec = []
-            if reg is not None:
-                fig2, ax2 = plt.subplots(1, outer_loops, figsize=(50, 20))
-                fig2.suptitle('Weight ' + str(ww) +
-                            ', regularization l' + str(reg), fontsize=40)
-
-            results_dict[dkey]['inner_loss'] =[]
+            results_dict[dkey]['inner_dic'] =[]
             results_dict[dkey]['y_guess'] = []
             results_dict[dkey]['y_true'] = []
             results_dict[dkey]['best_lambda'] = []
             results_dict[dkey]['net'] = []
             results_dict[dkey]['metabs1'] = []
             results_dict[dkey]['metabs2'] = []
+            results_dict[dkey]['outer_run'] = []
             for i in range(outer_loops):
                 net = LogRegNet(ml.data_dict[dattype].shape[1])
                 # net, epochs, labels, data, folds=3, regularizer=None, weighting=True, lambda_grid=None
                 # inner_auc, y_guess_fin, y_true, net_out, best_lambda
-                inner_loss, y_guess, y_true, net_out, best_lambda = ml.train_net(
-                    net, epochs, labels, data_in, regularizer=reg, weighting=ww, lambda_grid=lambdas)
+                inner_dic, y_guess, y_true, net_out, best_lambda, outer_run = ml.train_net(
+                    net, epochs, labels, data_in, regularizer=reg, weighting=ww, lambda_grid=lambda_in, train_inner = inner_fold, optimization = optim_param)
 
                 weights = [param for param in net.parameters()]
             
@@ -76,7 +77,7 @@ def main(path, ml, lambdas):
                 vals2 = np.sort(np.abs((weights[0][1,:].T-weights[0][1,:].T).detach().numpy()))
                 vals2 = (vals2 - vals2.min())/(vals2.max()-vals2.min())
                 
-                results_dict[dkey]['inner_loss'].append(inner_loss)
+                results_dict[dkey]['inner_dic'].append(inner_dic)
                 results_dict[dkey]['y_guess'].append(y_guess)
                 results_dict[dkey]['y_true'].append(y_true)
                 results_dict[dkey]['net'].append(net_out)
@@ -84,18 +85,22 @@ def main(path, ml, lambdas):
                 results_dict[dkey]['metabs1'].append(pd.DataFrame(metabs, vals))
                 results_dict[dkey]['metabs2'].append(
                     pd.DataFrame(metabs2, vals2))
+                results_dict[dkey]['outer_run'].append(outer_run)
 
-                if inner_loss is not None:
-                    for k in inner_loss.keys():
-                        ax2[i].scatter([k]*len(inner_loss[k]),
-                                    inner_loss[k], s=150)
+                if inner_dic is not None:
+                    for k in inner_dic.keys():
+                        fig2, ax2 = plt.subplots(
+                            1, outer_loops, figsize=(50, 20))
+                        fig2.suptitle('Weight ' + str(ww) +
+                              ', regularization l' + str(reg), fontsize=40)
+                        ax2[i].scatter([k]*len(inner_dic[k]),
+                                    inner_dic[k], s=150)
                         ax2[i].set_xlabel('lambda values', fontsize=30)
-                        ax2[i].set_ylabel('Loss', fontsize=30)
+                        ax2[i].set_ylabel(optim_param.capitalize(), fontsize=30)
                         ax2[i].set_xscale('log')
                         ax2[i].set_title('Outer Fold ' + str(i), fontsize=30)
 
-                    fig2.savefig('lambdas_w' + str(ww) + '_l' + str(reg) + '.png')
-                    fig2.show()
+                    fig2.savefig(optim_param + '_lambdas_w' + str(ww) + '_l' + str(reg) + '.png')
                 fpr, tpr, _ = roc_curve(y_true, y_guess[:, 1].squeeze())
                 roc_auc = auc(fpr, tpr)
                 if i != 0:
@@ -139,8 +144,7 @@ def main(path, ml, lambdas):
 
             kk += 1
     #             plt.legend()
-    plt.savefig(path + 'nested_lr_AUC' + str(dattype).replace('.', '_') + '.png')
-    fix.show()
+    plt.savefig(path + optim_param + '_nested_lr' + str(dattype).replace('.', '_') + '.png')
 
     plt.figure()
     plt.bar(np.arange(len(auc_all)), auc_all, yerr=auc_all_std)
@@ -150,22 +154,27 @@ def main(path, ml, lambdas):
     plt.title("Average AUC score of 5 Outer CV Loops, Week " +
             str(dattype).replace('.', '_'))
     plt.tight_layout()
-    plt.savefig(path + 'nested_lr2_avgAUC' +
+    plt.savefig(path + optim_param + '_nested_lr2_avgAUC' +
                 str(dattype).replace('.', '_') + '.png')
 
-    ff = open(path + "output.pkl", "wb")
+    ff = open(path + optim_param + "_output.pkl", "wb")
     pickle.dump(results_dict, ff)
     ff.close()
 
 if __name__ == "__main__":
     # path = '/PHShome/jjd65/CDIFF/cdiff_metabolomics/outdir/'
-    path = 'outputs/'
+    parser = argparse.ArgumentParser()
     cd = cdiffDataLoader()
     cd.make_pt_dict(cd.cdiff_raw)
     filt_out = cd.filter_metabolites(40)
 
-    lambda_vector = np.logspace(-6,4,num = 10)
+    lambda_vector = np.logspace(-6,4,num = 100)
+
+    parser.add_argument("-o", "--optim_type", help="type of lambda optimization", type=str)
+    args = parser.parse_args()
+    path = 'outputs/'
 
     ml = mlMethods(cd.pt_info_dict, lag=1)
     ml.path = path
-    main_nets(path, ml, lambda_vector)
+
+    main(path, ml, lambda_vector, args.optim_type)
