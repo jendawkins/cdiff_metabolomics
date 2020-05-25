@@ -1,2 +1,6 @@
 *.ipynb
 figures_old/
+*.png
+outdir/
+outdir_may22/
+*.pkl

@@ -65,7 +65,7 @@ source activate dispatcher
 
 
 cd /PHShome/jjd65/CDIFF/
-python3 ./main_nets.py
+python3 ./main_nets.py -o {0}
 '''
 
 # Make the directories to store the information
@@ -77,10 +77,11 @@ python3 ./main_nets.py
 #    shutil.rmtree(basepath)
 #    os.mkdir(basepath)
 
-# options = {'cooperation3','competing2','competing3a','competing3b'}
+options = ['auc', 'f1', 'loss']
 
-fname = 'cdiff_logregnet.lsf'
-f = open(fname,'w')
-f.write(my_str)
-f.close()
-os.system('bsub < {}'.format(fname))
+for option in options:
+    fname = 'cdiff_logregnet.lsf'
+    f = open(fname,'w')
+    f.write(my_str.format(option))
+    f.close()
+    os.system('bsub < {}'.format(fname))
