@@ -9,7 +9,7 @@ import pickle
 import os
 
 
-def main(path, ml, lambdas, inner_fold = True, optim_param = 'auc'):
+def main(path, ml, lambdas, inner_fold=True, optim_param='auc', dattype='all_data', perc = None):
 
     epochs = 1000
 
@@ -21,7 +21,7 @@ def main(path, ml, lambdas, inner_fold = True, optim_param = 'auc'):
     weight_vec = [False, True]
 
     outer_loops = 5
-    dattype = 'all_data'
+    
     # for dattype in list(ml.targets_dict.keys()):
     auc_all = []
     auc_all_std = []
@@ -59,19 +59,19 @@ def main(path, ml, lambdas, inner_fold = True, optim_param = 'auc'):
             results_dict[dkey]['metabs2'] = []
             results_dict[dkey]['outer_run'] = []
 
-            if reg is not None:
+            if reg is not None and inner_fold is True:
                 fig2, ax2 = plt.subplots(1,outer_loops, figsize = (50,20))
                 fig2.suptitle('Weight ' + str(ww) + ', regularization l' + str(reg), fontsize = 40)
                 
 
             for i in range(outer_loops):
-                net = LogRegNet(ml.data_dict[dattype].shape[1])
+                
                 # net, epochs, labels, data, folds=3, regularizer=None, weighting=True, lambda_grid=None
                 # inner_auc, y_guess_fin, y_true, net_out, best_lambda
                 inner_dic, y_guess, y_true, net_out, best_lambda, outer_run = ml.train_net(
-                    net, epochs, labels, data_in, regularizer=reg, weighting=ww, lambda_grid=lambda_in, train_inner = inner_fold, optimization = optim_param)
-
-                weights = [param for param in net.parameters()]
+                    epochs, labels, data_in, regularizer=reg, weighting=ww, lambda_grid=lambda_in, 
+                    train_inner = inner_fold, optimization = optim_param, perc = perc)
+                weights = [param for param in net_out.parameters()]
             
                 metab_ixs = np.argsort(np.abs((weights[0][1,:].T).detach().numpy()))
                 metabs =ml.data_dict[dattype].columns.values[metab_ixs]
@@ -80,8 +80,10 @@ def main(path, ml, lambdas, inner_fold = True, optim_param = 'auc'):
                 
                 metab_ixs2 = np.argsort(np.abs((weights[0][1,:].T-weights[0][1,:].T).detach().numpy()))
                 metabs2 = ml.data_dict[dattype].columns.values[metab_ixs2]
-                vals2 = np.sort(np.abs((weights[0][1,:].T-weights[0][1,:].T).detach().numpy()))
+                # import pdb; pdb.set_trace()
+                vals2 = np.sort(np.abs((weights[0][1,:].T-weights[0][0,:].T).detach().numpy()))
                 vals2 = (vals2 - vals2.min())/(vals2.max()-vals2.min())
+
                 
                 results_dict[dkey]['inner_dic'].append(inner_dic)
                 results_dict[dkey]['y_guess'].append(y_guess)
@@ -93,10 +95,12 @@ def main(path, ml, lambdas, inner_fold = True, optim_param = 'auc'):
                     pd.DataFrame(metabs2, vals2))
                 results_dict[dkey]['outer_run'].append(outer_run)
                 # import pdb; pdb.set_trace()
-                if inner_dic is not None:
-                    for k in inner_dic.keys():
-                        ax2[i].scatter([k]*len(inner_dic[k]),
-                                    inner_dic[k], s=150)
+                cvec = ['c','m','g']
+                if inner_dic is not None and inner_fold is True:
+                    for i,k in enumerate(inner_dic.keys()):
+                        for kk in range(len(inner_dic[k])):
+                            ax2[i].scatter([k],
+                                        inner_dic[k][kk], s=150, color = cvec[kk])
                         ax2[i].set_xlabel('lambda values', fontsize=30)
                         ax2[i].set_ylabel(optim_param.capitalize(), fontsize=30)
                         ax2[i].set_xscale('log')
@@ -128,7 +132,8 @@ def main(path, ml, lambdas, inner_fold = True, optim_param = 'auc'):
 
             auc_all.append(np.mean(auc_vec))
             auc_all_std.append(np.std(auc_vec))
-            fig2.savefig(optim_param + '_lambdas_w' + str(ww) + '_l' + str(reg) + '.png')
+            if inner_dic is not None and inner_fold is True:
+                fig2.savefig(path + dattype + '_' + optim_param + '_lambdas_w' + str(ww) + '_l' + str(reg) + '.png')
 
             if dattype == 'week_one':
                 ax[ii, jj].set_title('ROC Curves, Week 1, Eventual Reurrence' + reglab +
@@ -149,20 +154,23 @@ def main(path, ml, lambdas, inner_fold = True, optim_param = 'auc'):
 
             kk += 1
     #             plt.legend()
-    plt.savefig(path + optim_param + '_nested_lr' + str(dattype).replace('.', '_') + '.png')
+    plt.savefig(path + dattype + '_' + optim_param + '_nested_lr' + str(dattype).replace('.', '_') + '.png')
 
-    plt.figure()
+    plt.figure(figsize=(18, 10))
     plt.bar(np.arange(len(auc_all)), auc_all, yerr=auc_all_std)
-    plt.xticks(np.arange(len(auc_all)), barlabs)
+    plt.xticks(np.arange(len(auc_all)), barlabs, fontsize = 20)
     plt.ylim([0, 1])
-    plt.xticks(rotation=45, rotation_mode='anchor', horizontalalignment='right')
-    plt.title("Average AUC score of 5 Outer CV Loops, Week " +
-            str(dattype).replace('.', '_'))
+    plt.yticks(np.linspace(0,1,11), fontsize = 20)
+    plt.xticks(rotation=45, rotation_mode='anchor', horizontalalignment='right', fontsize = 20)
+    if dattype == 'all_data':
+        plt.title("Average AUC score of 5 Outer CV Loops, All Data", fontsize = 25)
+    else: 
+        plt.title("Average AUC score of 5 Outer CV Loops, Week " + str(dattype), fontsize=25)
     plt.tight_layout()
-    plt.savefig(path + optim_param + '_nested_lr2_avgAUC' +
+    plt.savefig(path + dattype + '_' + optim_param + '_nested_lr2_avgAUC' +
                 str(dattype).replace('.', '_') + '.png')
 
-    ff = open(path + optim_param + "_output.pkl", "wb")
+    ff = open(path + dattype + '_' + optim_param + "_output.pkl", "wb")
     pickle.dump(results_dict, ff)
     ff.close()
 
@@ -182,4 +190,4 @@ if __name__ == "__main__":
     ml = mlMethods(cd.pt_info_dict, lag=1)
     ml.path = path
 
-    main(path, ml, lambda_vector, inner_fold = True, optim_param = args.optim_type)
+    main(path, net, ml, lambda_vector, inner_fold = True, optim_param = args.optim_type)

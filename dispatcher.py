@@ -64,7 +64,7 @@ module load anaconda/default
 source activate dispatcher
 
 
-cd /PHShome/jjd65/CDIFF/
+cd /PHShome/jjd65/CDIFF/cdiff_metabolomics
 python3 ./main.py -o {0}
 '''
 
