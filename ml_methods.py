@@ -293,64 +293,41 @@ class mlMethods():
             print('Pts with CDIFF: ' + str(sick))
             print('Pts cleared: ' + str(well))
 
-    def split_test_train(self, data, labels, perc=.8, all_data=False):
-        if all_data:
-            assert(isinstance(data, dict))
-            status = [data[i][list(data[i].keys())[-1]]['PATIENT STATUS (BWH)']
-                    for i in list(data.keys())]
-            classes = np.unique(status)
-            c1 = np.where(np.array(status) == classes[0])[0]
-            c2 = np.where(np.array(status) == classes[1])[0]
-            ixtrain = np.concatenate((np.random.choice(c1, np.int(len(c1)*perc), replace=False),
-                                    np.random.choice(c2, np.int(len(c2)*perc), replace=False)))
-            ixtest = np.array(list(set(range(len(status))) - set(ixtrain)))
-            train = []
-            test = []
-            train_l = []
-            test_l = []
-            for i in ixtrain:
-                days = [sorted(list(data[ii].keys()))
-                        for ii in data.keys()]
+    def split_test_train(self, data, labels, perc=.8):
 
-                N = 0.0
-                days = [[day for day in sub if day != N] for sub in days]
-                if data[i] and len(days[i]) > 0:
-                    train_l.extend([data[i][days[i][k]]['PATIENT STATUS (BWH)'] for
-                                    k in range(len(days[i]))])
-                    train.append(pd.concat(
-                        [data[i][days[i][k]]['DATA'] for k in range(len(days[i]))], 1))
-            for i in ixtest:
-                days = [sorted(list(data[ii].keys()))
-                        for ii in data.keys()]
-                if data[i]:
-                    test_l.extend([data[i][days[i][k]]['PATIENT STATUS (BWH)'] for
-                                k in range(len(days[i]))])
-                    test.append(pd.concat(
-                        [data[i][days[i][k]]['DATA'] for k in range(len(days[i]))], 1))
-            train = pd.concat(train, 1).T
-            test = pd.concat(test, 1).T
+        if isinstance(data.index.values[0], str):
+            patients = [int(i.split('-')[1]) for i in data.index.values]
+            pdict = {}
+            for i,pt in enumerate(patients):
+                pdict[pt] = labels[i]
+            recur_pts = [pt for pt in pdict.keys() if pdict[pt] == 1]
+            cleared_pts = [pt for pt in pdict.keys() if pdict[pt]==0]
 
-            train = self.log_transform(train)
-            test = self.log_transform(test)
+            ixtrain0 = np.concatenate(
+                (np.random.choice(recur_pts, np.int(len(c1)*perc), replace=False),
+                 np.random.choice(cleared_pts, np.int(len(c1)*perc), replace=False)))
+            ixtest0 = np.array(list(set(pdict.keys())- set(ixtrain)))
 
-            train = self.filter_vars(train, train_l, var_type='between')
-            test = self.filter_vars(test, test_l, var_type='between')
+            ixtrain = np.concatenate([np.where(patients == i)[0] for i in ixtrain0])
+            ixtest = np.concatenate(
+                [np.where(patients == i)[0] for i in ixtest0])
 
-            train, train_l, test, test_l = np.array(train), np.array(
-                train_l), np.array(test), np.array(test_l)
-            train_l = np.array(train_l == 'Recur').astype('float')
-            test_l = np.array(test_l == 'Recur').astype('float')
+            set1 = set([patients[ix] for ix in ixtest])
+            set2 = set([patients[ix] for ix in ixtrain])
+            set1.intersection(set2)
+            assert(not set1.intersection(set2))
+
         else:
+
             classes = np.unique(labels)
             c1 = np.where(labels == classes[0])[0]
             c2 = np.where(labels == classes[1])[0]
             ixtrain = np.concatenate((np.random.choice(c1, np.int(len(c1)*perc), replace=False),
                                     np.random.choice(c2, np.int(len(c2)*perc), replace=False)))
             ixtest = np.array(list(set(range(len(labels))) - set(ixtrain)))
-            train, train_l, test, test_l = data[ixtrain,
-                                                :], labels[ixtrain], data[ixtest, :], labels[ixtest]
+ 
 
-        return train, train_l, test, test_l
+        return ixtrain, ixtest
     
     def LOOCV_split(self,data,labels):
         ix_out = int(np.random.choice(np.arange(len(labels)), 1))
@@ -454,6 +431,7 @@ class mlMethods():
             for f in range(folds):
                 temp1,temp2,temp3,temp4,train_ixs, test_ix = self.LOOCV_split(X,y)
                 txs.append((train_ixs,test_ix))
+                
 
         skf = StratifiedKFold(n_splits=folds, shuffle = shuffle)
 
@@ -624,17 +602,40 @@ class mlMethods():
         b[np.arange(a.shape[0]), a] = 1
         return torch.Tensor(b)
 
-    def leave_one_out_cv(self, data, labels, folds = 3):
-        ix = []
-        ixtrain = []
-        for i in range(folds):
-            ixs = np.where(labels == 1)[0]
-            ix.append(np.random.choice(ixs,1))
-            ixtrain.append(list(set(range(len(labels))) - set(ix[-1])))
-        return zip(ixtrain, ix)
+    def leave_one_out_cv(self, data, labels, num_folds = None):
+
+        if isinstance(data.index.values[0], str):
+            patients = np.array([int(i.split('-')[1]) for i in data.index.values])
+            pdict = {}
+            for i, pt in enumerate(patients):
+                pdict[pt] = labels[i]
 
 
-    def train_net(self, epochs, labels, data, loo = True, folds = 3, regularizer = None, weighting = True, lambda_grid=None, train_inner = True, optimization = 'auc', perc = None):
+            ix_all = []
+            for ii in pdict.keys():
+                pt_test = ii
+                pt_train = list(set(pdict.keys()) - set([ii]))
+                ixtrain = (np.concatenate(
+                    [np.where(patients == j)[0] for j in pt_train]))
+                ixtest = np.where(patients == pt_test)[0]
+                set1 = set([patients[ix] for ix in ixtest])
+                set2 = set([patients[ix] for ix in ixtrain])
+                set1.intersection(set2)
+
+                ix_all.append((ixtrain, ixtest))
+                assert(not set1.intersection(set2))
+
+        else:
+            ix_all = []
+            # CHANGE LINE!
+            for ixs in range(len(labels)):
+                ixtest = [ixs]
+                ixtrain = list(set(range(len(labels))) - set(ixtest))
+                ix_all.append((ixtrain, ixtest))
+        return ix_all
+
+
+    def train_net(self, epochs, labels, data, loo_inner = True, loo_outer = True, folds = 3, regularizer = None, weighting = True, lambda_grid=None, train_inner = True, optimization = 'auc', perc = None, ixs = None):
         # Inputs:
             # NNet - net to use (uninitialized)
             # epochs - number of epochs for training inner and outer loop
@@ -649,28 +650,33 @@ class mlMethods():
             # optimization - what metric ('auc','loss','f1') to use for both early stopping and deciding on lambda value. If loo = True, optimization should be 'loss'
             # perc - Remove metabolites with variance in the bottom 'perc' percent if perc is not None
         
+        if loo_outer:
+            assert(ixs is not None)
+
         # Filter variances if perc is not none
         if perc is not None:
             data = self.filter_vars(data, labels, perc=perc)
 
         # Split data in outer split
-        TRAIN, TRAIN_L, TEST, TEST_L = self.split_test_train(data,labels, all_data = isinstance(data, dict))
-        TRAIN, TRAIN_L, TEST, TEST_L = torch.FloatTensor(TRAIN), torch.DoubleTensor(
-            TRAIN_L), torch.FloatTensor(TEST), torch.DoubleTensor(TEST_L)
+        if not loo_outer:
+            ixtrain, ixtest = self.split_test_train(data, labels)                                
+        else:
+            ixtrain, ixtest = ixs
 
+        # Normalize data and fix instances where stdev(data) = 0
+        dem = np.std(data, 0)
+        dz = np.where(dem == 0)[0]
+        dem[dz] = 1
+        data = (data - np.mean(data, 0))/dem
         
-        # Normalize TRAIN and TEST data and fix instances where stdev(data) = 0
-        dem = torch.std(TRAIN,0)
-        dz = torch.where(dem == 0)
-        dem[dz] = 1
-        TRAIN_s = (TRAIN - torch.mean(TRAIN, 0))/dem
+        TRAIN, TRAIN_L, TEST, TEST_L = data.iloc[ixtrain,
+                                                 :], labels[ixtrain], data.iloc[ixtest, :], labels[ixtest]
 
-        dem = torch.std(TEST, 0)
-        dz = torch.where(dem == 0)
-        dem[dz] = 1
-        TEST_s = (TEST - torch.mean(TEST, 0))/dem
-        TEST = TEST_s
-        TRAIN = TRAIN_s
+        if isinstance(ixtest, int):
+            TEST, TEST_L = torch.FloatTensor([np.array(TEST)]), torch.DoubleTensor([[TEST_L]])
+        else:
+            TEST, TEST_L = torch.FloatTensor(
+                np.array(TEST)), torch.DoubleTensor(TEST_L)
 
         # initialize net with TRAIN shape
         net = LogRegNet(TRAIN.shape[1])
@@ -678,43 +684,72 @@ class mlMethods():
 
         # if we are doing an inner cv:
         if regularizer is not None and train_inner:
-            skf = StratifiedKFold(n_splits=folds)
             inner_dic = dict()
             
             # split data eiter in 3 folds or leave one out and iterate over the 3 train and test datasets
-            if loo:
+            if loo_inner:
                 # self.leave_one_out_cv always selects a positive example (i.e. recur) as the 1 test subject
-                genfunc = self.leave_one_out_cv
+                zip_ixs = self.leave_one_out_cv(TRAIN, TRAIN_L)
             else:
-                genfunc = skf.split
+                if isinstance(TRAIN.index.values[0], str):
+                    data_perc_take = 1/folds
+                    patients = [int(ti.split('-')[1]) for ti in TRAIN.index.values]
+                    unique_patients = np.unique(patients)
+                    pts_to_take = np.copy(unique_patients)
+                    ix_all = []
+                    for f in range(folds):
+                        # patients to test (1/folds * len(data) patients)
+                        pts_take = np.random.choice(pts_to_take, int(data_perc_take*len(patients)))
 
-            for rr in genfunc(TRAIN, TRAIN_L):
-                train_index, test_index = rr
-                X_train, X_test = TRAIN[train_index,:], TRAIN[test_index,:]
-                y_train, y_test = TRAIN_L[train_index], TRAIN_L[test_index]
+                        # train with rest 
+                        pts_train = list(set(unique_patients) - set(pts_take))
+                        ix_ts = np.concatenate(
+                            [np.where(patients == it)[0] for it in pts_take])
 
-                # initialize net for each new dataset
-                net.apply(self.init_weights)
-
-                # add weights if we want to weight
-                if weighting:
-                    weights = len(y_train) / (2 * np.bincount(y_train))
-                    criterion = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor(weights))
-
+                        ix_tr = np.concatenate(
+                            [np.where(patients == it)[0] for it in pts_train])
+                        ix_all.append(ix_tr, ix_ts)
+                    zip_ixs = ix_all
                 else:
-                    criterion = nn.BCEWithLogitsLoss()
-                
-                # iterate over lambda values
-                for lamb in lambda_grid:
-                    test_running_loss = []
-                    running_auc = []
-                    running_f1 = []
+                    skf = StratifiedKFold(folds)
+                    zip_ixs = skf.split(TRAIN,TRAIN_L)
+                    
+            # iterate over lambda values
+            for lamb in lambda_grid:
+                # train over epochs for each lambda value
+                running_auc = []
+                running_loss = []
+                running_f1 = []
+                for epoch in range(epochs):
+                    # Go through all the data for each epoch
+                    y_test_vec = []
+                    y_guess_vec = []
+                    test_running_loss = 0
+                    for train_index, test_index in zip_ixs:
+                        X_train, X_test = TRAIN.iloc[train_index,:], TRAIN.iloc[test_index,:]
+                        y_train, y_test = TRAIN_L[train_index], TRAIN_L[test_index]
 
-                    # initialize weights before training
-                    net.apply(self.init_weights)
+                        if isinstance(test_index, int):
+                            X_train, y_train, X_test, y_test = torch.FloatTensor(np.array(X_train)), torch.DoubleTensor(y_train), torch.FloatTensor([np.array(X_test)]), torch.DoubleTensor([[y_test]])
+                        else:
+                            X_train, y_train, X_test, y_test = torch.FloatTensor(np.array(X_train)), torch.DoubleTensor(
+                                                    y_train), torch.FloatTensor(np.array(X_test)), torch.DoubleTensor(y_test)
+                        # initialize net for each new dataset
+                        net.apply(self.init_weights)
 
-                    # train over epochs for each lambda value
-                    for epoch in range(epochs):
+                        # add weights if we want to weight
+                        if weighting:
+                            weights = len(y_train) / (2 * np.bincount(y_train))
+                            criterion = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor(weights))
+
+                        else:
+                            criterion = nn.BCEWithLogitsLoss()
+                        
+
+                        # initialize weights before training
+                        net.apply(self.init_weights)
+
+                        # train over epochs for each lambda value
                         net.train()
                         optimizer.zero_grad()
                         out = net(X_train).double()
@@ -745,48 +780,56 @@ class mlMethods():
  
                         m = nn.Softmax(dim=1)
                         test_out_sig = m(test_out)
-                        
+
                         y_guess = test_out_sig.detach().numpy()
                         # find AUC score (NaN if y_test is only 1 value because there is no negative class)
-                        if loo:
-                            roc_auc = np.nan
-                        else:
-                            fpr, tpr, _ = roc_curve(y_test, y_guess[:,1].squeeze())
-                            roc_auc = auc(fpr, tpr)
 
-                        y_pred = np.argmax(y_guess, 1)
+                        # find f1 score                        
+                        test_running_loss += test_loss.detach().numpy().item()
 
-                        # find f1 score
-                        f1 = sklearn.metrics.f1_score(y_test, y_pred)
-                        
-                        test_running_loss.append(test_loss.item())
-                        running_auc.append(roc_auc)
-                        running_f1.append(f1)
+                        y_test_vec.append(y_test)
+                        y_guess_vec.append(y_guess)
+                    
+                    y_guess_mat = np.concatenate(y_guess_vec)
+                    y_pred_mat = np.argmax(y_guess_mat, 1)
+                    if len(y_test_vec) < y_guess_mat.shape[0]:
+                        y_test_vec = np.concatenate(y_test_vec)
+                    f1 = sklearn.metrics.f1_score(y_test_vec,y_pred_mat)
 
-                        if optimization == 'auc':
-                            running_vec = running_auc
-                        elif optimization == 'f1':
-                            running_vec = running_f1
-                        elif optimization == 'loss':
-                            running_vec = test_running_loss
+                    try:
+                        fpr, tpr, _ = roc_curve(y_test_vec, y_guess_mat[:, 1].squeeze())
+                    except:
+                        import pdb; pdb.set_trace()
+                    roc_auc = auc(fpr, tpr)
 
+                    running_auc.append(roc_auc)
+                    running_loss.append(test_running_loss / (len(y_test_vec)+1))
+                    running_f1.append(f1)
+
+                    if optimization == 'auc':
+                        running_vec = running_auc
+                    elif optimization == 'f1':
+                        running_vec = running_f1
+                    elif optimization == 'loss':
+                        running_vec = running_loss
+
+                    if epoch > 50:
                         if optimization == 'auc' or optimization == 'f1':
                             bool_test = np.array([r1 <= r2 for r1, r2 in zip(running_vec[-10:],running_vec[-11:-1])]).all()
                         else:
                             bool_test = np.array([r1 >= r2 for r1, r2 in zip(
                                 running_vec[-10:], running_vec[-11:-1])]).all()
-
-                        # perform early stopping if greater than 50 epochs and if either loss is increasing over the past 10 iterations or auc / f1 is decreasing over the past 10 iterations
-                        if epoch > 50 and bool_test:
-                            break
-                    # add record of lambda and lowest loss or highest auc/f1 associated with that lambda for this split
-                    if lamb not in inner_dic.keys():
-                        inner_dic[lamb] = [running_vec[-11]]
-                    else:
-                        inner_dic[lamb].append(running_vec[-11])
-            
+                    # perform early stopping if greater than 50 epochs and if either loss is increasing over the past 10 iterations or auc / f1 is decreasing over the past 10 iterations
+                    if epoch > 50 and bool_test:
+                        # add record of lambda and lowest loss or highest auc/f1 associated with that lambda at this epoch
+                        break
+                if lamb not in inner_dic.keys():
+                    inner_dic[lamb] = [running_vec[-11]]
+                else:
+                    inner_dic[lamb].append(running_vec[-11])            
+                
             # find the best lambda over all splits
-            max_val = np.max([np.median(it) for it in inner_dic.values()])
+            max_val = np.max([it for it in inner_dic.values()])
             best_lambda = [k for k,v in inner_dic.items() if max_val in set(v)][0]
             # print('Best Lambda = ' + str(best_lambda) + ', For weight ' + str(weighting) + 'and l'+ str(regularizer))
         else:
@@ -798,6 +841,8 @@ class mlMethods():
             inner_dic = None
         
         # Now, train outer loop
+        TRAIN = torch.FloatTensor(np.array(TRAIN))
+        TRAIN_L = torch.DoubleTensor(np.array(TRAIN_L))
         if weighting:
             weights = len(TRAIN_L) / (2 * np.bincount(TRAIN_L))
             criterion = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor(weights))
@@ -837,8 +882,11 @@ class mlMethods():
             test_out = net(TEST).double()
 
             # calculate loss
-            test_loss = criterion(test_out, self.make_one_hot(TEST_L,2))
-
+            try:
+                test_loss = criterion(test_out, self.make_one_hot(TEST_L,2))
+            except:
+                test_out = test_out.unsqueeze(0)
+                test_loss = criterion(test_out, self.make_one_hot(TEST_L, 2))
             mm = nn.Softmax(dim=1)
             test_out_sig = mm(test_out)
             y_guess.append(test_out_sig.detach().numpy())
@@ -847,30 +895,32 @@ class mlMethods():
             net_vec.append(net)
 
             # calc auc
-            fpr, tpr, _ = roc_curve(TEST_L, y_guess[-1][:,1].squeeze())
-            roc_auc = auc(fpr, tpr)
+            # fpr, tpr, _ = roc_curve(TEST_L, y_guess[-1][:,1].squeeze())
+            # roc_auc = auc(fpr, tpr)
 
             # calck f1 score
             y_pred = np.argmax(y_guess[-1],1)
             
-            f1 = sklearn.metrics.f1_score(TEST_L, y_pred)
+            # f1 = sklearn.metrics.f1_score(TEST_L, y_pred)
 
-            running_auc.append(roc_auc)
-            running_f1.append(f1)
+            # running_auc.append(roc_auc)
+            # running_f1.append(f1)
             
-            if optimization == 'auc':
-                running_vec = running_auc
-            elif optimization =='f1':
-                running_vec = running_f1
-            elif optimization == 'loss':
-                running_vec = test_running_loss
+            # if optimization == 'auc':
+            #     running_vec = running_auc
+            # elif optimization =='f1':
+            #     running_vec = running_f1
+            # elif optimization == 'loss':
+            
+            running_vec = test_running_loss
 
             # perform early stoping if loss is decreasing or auc/f1 is increasing
-            if optimization == 'auc' or optimization == 'f1':
-                bool_test = np.array([r1 <= r2 for r1, r2 in zip(
-                    running_vec[-10:], running_vec[-11:-1])]).all()
-            else:
-                bool_test = np.array([r1 >= r2 for r1, r2 in zip(
+            # if optimization == 'auc' or optimization == 'f1':
+            #     bool_test = np.array([r1 <= r2 for r1, r2 in zip(
+            #         running_vec[-10:], running_vec[-11:-1])]).all()
+            # else:
+                
+            bool_test = np.array([r1 >= r2 for r1, r2 in zip(
                     running_vec[-10:], running_vec[-11:-1])]).all()
             
             if epoch > 50 and bool_test:
