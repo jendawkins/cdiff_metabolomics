@@ -19,12 +19,9 @@ def main(path, ml, lambdas, inner_fold=True, optim_param='auc', dattype='all_dat
     barlabs = []
     cvec = ['C0', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6']
     weight_vec = [False, True]
-    if dattype == 'all_data':
-        data_in = ml.data_dict[dattype].iloc[:16, :20]
-        targets = ml.targets_int[dattype][:16]
-    else:
-        data_in = ml.data_dict[dattype].iloc[:5, :20]
-        targets = ml.targets_int[dattype][:5]
+
+    data_in = ml.data_dict[dattype]
+    targets = ml.targets_int[dattype]
 
     if outer_loo == True:
         ixx = ml.leave_one_out_cv(data_in, targets)
