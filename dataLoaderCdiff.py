@@ -5,7 +5,7 @@ from matplotlib import colors
 
 
 class cdiffDataLoader():
-    def __init__(self,file_name="CDiffMetabolomics.xlsx"):
+    def __init__(self, file_name="CDiffMetabolomics.xlsx", file_name16s='Feb2018_seqtab-nochim.xlsm'):
         self.filename = file_name
     
         self.xl = pd.ExcelFile(self.filename)
@@ -37,22 +37,62 @@ class cdiffDataLoader():
 
         self.cdiff_raw = self.cdiff_raw.iloc[1:, :]
 
+        self.raw16s = pd.ExcelFile(file_name16s)
+        self.raw16s = self.raw16s.parse()
+
+        dcols = ['-'.join(x.split('-')[1:])
+                 for x in self.raw16s.columns.values[1:]]
+        dcol = []
+        for x in dcols:
+            if len(x.split('-')[1]) == 2:
+                dcol.append('.'.join([x[:5], x[-1]]))
+            else:
+                dcol.append(x)
+        dcols = dcol
+        self.data16s = pd.DataFrame(
+            np.array(self.raw16s.iloc[:, 1:]), columns=dcols, index=self.raw16s.iloc[:, 0])
+
+        self.data16s = self.make_proportions(self.data16s)
+
+        self.make_pt_dict(self.cdiff_raw)
+        self.pt_info_dict = self.add_16s_to_info_dict(self.data16s, self.pt_info_dict)
+
+        # self.info_dict_16s = self.make_16s_dict(self.data16s)
+
         
-    # def index_by(self, colname, rowname):
-    #     cols = self.cdiff_raw.columns.values
-    #     ix1 = np.where(np.array(cols[0]) == colname)[0][0]
+    def make_16s_dict(self, data, ixs = None):
 
-    # #     c_map = {cols[i]:cols[i][ix] for i in range(len(cols))}
-    #     colnames = [cols[i][ix1] for i in range(len(cols))]
+        pt_names = [x.split('-')[0] for x in data.columns.names]
+        pts = []
+        for i, n in enumerate(np.unique(pt_names)):
+            pts.extend([str(i+1) + '.' + str(j)
+                        for j in range(len(np.where(pt_names == n)[0]))])
 
-    #     rows = self.cdiff_raw.index.values
-    #     ix2 = np.where(np.array(rows[0]) == rowname)[0][0]
+        ts = np.array([x.split('-')[1] for h in data.columns.names])
+        self.times = []
+        for el in ts:
+            self.times.append(float(el))
 
-    #     rownames = [rows[i][ix2] for i in range(len(rows))]
+        if idxs is None:
+            cdiff_raw_sm = data
+        else:
+            cdiff_raw_sm = data.iloc[idxs,:]
 
-    #     data = pd.DataFrame(np.array(self.cdiff_raw),
-    #                         columns=colnames, index=rownames)
-    #     return data
+        self.pt_info_dict = {}
+        pt_key = 0
+
+        pt_full_names = data.columns.names
+        self.pt_info_dict[pt_full_names[pt_key]] = {}
+
+        for j in range(len(data.columns.names)):
+            if j != 0 and pt_names[j] != pt_names[j-1]:
+                pt_key += 1
+                self.pt_info_dict[pt_full_names[pt_key]] = {}
+                self.pt_info_dict[pt_full_names[pt_key]][self.times[j]].update(cdiff_raw_sm.iloc[:,j])
+
+            else:
+                self.pt_info_dict[pt_full_names[pt_key]][self.times[j]].update(
+                    {'DATA': cdiff_raw_sm.iloc[:, j]})
 
 
     def make_pt_dict(self, data, idxs=None):
@@ -105,6 +145,22 @@ class cdiffDataLoader():
                 self.pt_info_dict[pt_key][self.times[j]].update(
                     {'DATA': cdiff_raw_sm.iloc[:, j]})
 
+    def add_16s_to_info_dict(self, data16s, pt_info_dict):
+        
+        for key in pt_info_dict.keys():
+            for tmpt in pt_info_dict[key].keys():
+                pt_label = pt_info_dict[key][tmpt]['CLIENT SAMPLE ID']
+                try:
+                    col_16s = data16s[pt_label]
+                    pt_info_dict[key][tmpt]['16s'] = col_16s
+                except:
+                    continue
+        return pt_info_dict
+    
+    def make_proportions(self, data):
+        total_counts = np.sum(data, 0)
+        data = data / total_counts
+        return data
 
     def index_by(self, colname, rowname):
         cols = self.data.columns.values
@@ -133,6 +189,20 @@ class cdiffDataLoader():
 
         filt_out = np.where(counts > val)[0]
         self.make_pt_dict(np.array(self.data_sm), idxs=filt_out)
+        return filt_out
+
+    def filter_microbes(self, val):
+        c = []
+        for pt in self.info_dict_16s():
+            c.append(np.sum(np.vstack([self.info_dict_16s[pt][t]['16s']
+                                        for t in self.info_dict_16s[pt].keys()]), 0))
+        cts = np.vstack(c).T
+        cts[cts > 0] = 1
+        counts = np.sum(cts, 1)
+
+        filt_out = np.where(counts > val)[0]
+
+        self.make_16s_dict(np.array(self.data_sm), idxs=filt_out)
         return filt_out
 
 

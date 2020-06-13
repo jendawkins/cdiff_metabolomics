@@ -206,10 +206,15 @@ if __name__ == "__main__":
 
     parser.add_argument("-o", "--optim_type", help="type of lambda optimization", type=str)
     args = parser.parse_args()
-    path = 'outputs/'
+
+    parser.add_argument("-dtype", "--data_type",
+                        help="type of lambda optimization", type=str)
+    args = parser.parse_args()
+
+    path = 'outputs_june13/'
 
     ml = mlMethods(cd.pt_info_dict, lag=1)
     ml.path = path
 
-    main(path, ml, lambda_vector, optim_param = args.optim_type)
+    main(path, ml, lambda_vector, optim_param = args.optim_type, dattype = args.data_type)
 

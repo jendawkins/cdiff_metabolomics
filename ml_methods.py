@@ -166,73 +166,17 @@ class mlMethods():
         self.path = 'figs/'
 
 
-    def make_pt_dict(self, data, idxs=None):
-        header_lst = [i[4:]
-                      for i in data.columns.values if 'Unnamed' not in i[0]]
-        header_names = header_lst
-        header_labels = ['CLIENT SAMPLE ID','CLIENT MATRIX','SAMPLE DESCRIPTION',
-        'CULTURE STATUS (BWH)','PATIENT STATUS (BWH)','MASS EXTRACTED']
-
-        # pt_info_dict = {header_names[j][0]:{header_labels[i]:header_names[j][i] for i in range(1,len(header_labels))} for j in range(len(header_names))}
-
-        row_names = data.index.values
-
-        pt_names = np.array([h[0].split('-')[0] for h in header_names])
-        pts = []
-        for i, n in enumerate(np.unique(pt_names)):
-            pts.extend([str(i+1) + '.' + str(j)
-                        for j in range(len(np.where(pt_names == n)[0]))])
-
-        ts = np.array([h[0].split('-')[1] for h in header_names])
-        times = []
-        for el in ts:
-            try:
-                times.append(float(el))
-            except:
-                tm = str(ord(list(el)[1])-97)
-                times.append(float(list(el)[0] + '.' + tm))
-        idx_val = row_names
-        if idxs is None:
-            data = pd.DataFrame(
-                np.array(data), columns=header_names, index=row_names)
-        else:
-            data = pd.DataFrame(
-                np.array(data)[idxs, :], columns=header_names, index=np.array(row_names)[idxs])
-
-        pt_info_dict = {}
-        pt_key = 0
-        pt_info_dict[pt_key] = {}
-
-        for j in range(len(header_names)):
-            if j != 0 and pt_names[j] != pt_names[j-1]:
-                pt_key += 1
-                pt_info_dict[pt_key] = {}
-                try:
-                    pt_info_dict[pt_key][times[j]] = {
-                        header_labels[i]: header_names[j][i] for i in range(len(header_labels))}
-                except:
-                    import pdb; pdb.set_trace()
-                pt_info_dict[pt_key][times[j]].update(
-                    {'DATA': data.iloc[:, j]})
-
-            else:
-                try:
-                    pt_info_dict[pt_key][times[j]] = {
-                        header_labels[i]: header_names[j][i] for i in range(len(header_labels))}
-                except:
-                    import pdb; pdb.set_trace()
-                pt_info_dict[pt_key][times[j]].update(
-                    {'DATA': data.iloc[:, j]})
-        return pt_info_dict
-
     def log_transform(self, data):
         temp = data.copy()
         temp = temp.replace(0,np.inf)
         return np.log(data + 1)
 
-    def normalize(self,x):
+    def standardize(self,x):
         assert(x.shape[0]<x.shape[1])
         return (x - np.mean(x, 0))/np.std(x, 0)
+    
+    # def normalize(self, x):
+
 
     def make_metabolome_info_dict(self, metabolites, metabolome_info_dict):
         metabolome_info_dict_2 = {m: metabolome_info_dict[m] for m in metabolites}
@@ -293,6 +237,7 @@ class mlMethods():
             print('Pts with CDIFF: ' + str(sick))
             print('Pts cleared: ' + str(well))
 
+    @profile
     def split_test_train(self, data, labels, perc=.8):
 
         if isinstance(data.index.values[0], str):
@@ -328,17 +273,6 @@ class mlMethods():
  
 
         return ixtrain, ixtest
-    
-    def LOOCV_split(self,data,labels):
-        ix_out = int(np.random.choice(np.arange(len(labels)), 1))
-
-        ix_train = set(np.arange(len(labels)))
-        ix_train.remove(ix_out)
-        ix_train = np.array(list(ix_train))
-        if isinstance(data,pd.DataFrame):
-            return data.iloc[ix_train, :], labels[ix_train], data.iloc[ix_out], labels[ix_out], ix_train, ix_out
-        else:
-            return data[ix_train, :], labels[ix_train], data[ix_out], labels[ix_out], ix_train, ix_out
 
     def pca_func(self,x,targets,n=2):
         x = (x - np.min(x, 0))/(np.max(x, 0) - np.min(x, 0))
@@ -602,6 +536,7 @@ class mlMethods():
         b[np.arange(a.shape[0]), a] = 1
         return torch.Tensor(b)
 
+    @profile
     def leave_one_out_cv(self, data, labels, num_folds = None):
 
         if isinstance(data.index.values[0], str):
@@ -634,7 +569,7 @@ class mlMethods():
                 ix_all.append((ixtrain, ixtest))
         return ix_all
 
-
+    @profile
     def train_net(self, epochs, labels, data, loo_inner = True, loo_outer = True, folds = 3, regularizer = None, weighting = True, lambda_grid=None, train_inner = True, optimization = 'auc', perc = None, ixs = None):
         # Inputs:
             # NNet - net to use (uninitialized)
