@@ -65,7 +65,7 @@ source activate dispatcher
 
 
 cd /PHShome/jjd65/CDIFF/cdiff_metabolomics
-python3 ./main.py -o {0}
+python3 ./main.py -o {0} -dtype {1}
 '''
 
 # Make the directories to store the information
@@ -78,10 +78,12 @@ python3 ./main.py -o {0}
 #    os.mkdir(basepath)
 
 options = ['auc', 'f1', 'loss']
+dtypes = ['week_one', 'all_data']
 
 for option in options:
-    fname = 'cdiff_logregnet.lsf'
-    f = open(fname,'w')
-    f.write(my_str.format(option))
-    f.close()
-    os.system('bsub < {}'.format(fname))
+    for dtype in dtypes:
+        fname = 'cdiff_logregnet.lsf'
+        f = open(fname,'w')
+        f.write(my_str.format(option, dtype))
+        f.close()
+        os.system('bsub < {}'.format(fname))

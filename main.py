@@ -208,7 +208,7 @@ if __name__ == "__main__":
                         help="type of lambda optimization", type=str)
     args = parser.parse_args()
 
-    path = 'outputs_june13/'
+    path = 'outputs_june15/'
 
     ml = mlMethods(cd.pt_info_dict, lag=1)
     ml.path = path
