@@ -78,13 +78,13 @@ def main(path, ml, lambdas, inner_fold=True, optim_param='auc', dattype='all_dat
                 fig2.suptitle('Weight ' + str(ww) + ', regularization l' + str(reg), fontsize = 40)
                 
 
-            for i in range(outer_loops):
+            for ol in range(outer_loops):
                 
                 # net, epochs, labels, data, folds=3, regularizer=None, weighting=True, lambda_grid=None
                 # inner_auc, y_guess_fin, y_true, net_out, best_lambda
 
                 if outer_loo:
-                    ix_in = ixx[i]
+                    ix_in = ixx[ol]
                 else:
                     ix_in = None
                 inner_dic, y_guess, y_true, net_out, best_lambda, outer_run = ml.train_net(
@@ -116,14 +116,13 @@ def main(path, ml, lambdas, inner_fold=True, optim_param='auc', dattype='all_dat
                 # import pdb; pdb.set_trace()
                 cvec = ['c','m','g']
                 if inner_dic is not None and inner_fold is True:
-                    for i,k in enumerate(inner_dic.keys()):
-                        for kk in range(len(inner_dic[k])):
-                            ax2.scatter([k],
-                                        inner_dic[k][kk], s=150, color = cvec[kk])
+                    for ij,k in enumerate(inner_dic.keys()):
+                        ax2.scatter([k],
+                                        [inner_dic[k][optim_param]], s=150)
                         ax2.set_xlabel('lambda values', fontsize=30)
                         ax2.set_ylabel(optim_param.capitalize(), fontsize=30)
                         ax2.set_xscale('log')
-                        ax2.set_title('Outer Fold ' + str(i), fontsize=30)
+                        ax2.set_title('Outer Fold ' + str(ol), fontsize=30)
                         if optim_param == 'auc' or optim_param == 'f1':
                             ax2.set_ylim(0,1)
 
@@ -132,12 +131,13 @@ def main(path, ml, lambdas, inner_fold=True, optim_param='auc', dattype='all_dat
                     fpr, tpr, _ = roc_curve(y_true, y_guess[:, 1].squeeze())
                     roc_auc = auc(fpr, tpr)
                     auc_vec.append(roc_auc)
-                    if i ==0:
+                    if ol ==0:
                         ax[ii, jj].plot(fpr, tpr, alpha=0.7, color=cvec[kk])
-                    if i > 0:
+                    if ol > 0:
                         ax[ii, jj].plot(fpr, tpr, color=cvec[kk], alpha=.7, label=reglab[2:] +
                                         ', AUC = ' + str(np.round(np.mean(auc_vec[-25:]), 3)))
             
+                print('loop ' + str(ol) + ' complete')
             if outer_loo:
                 y_true = np.concatenate(results_dict[dkey]['y_true'])
                 y_guess = np.concatenate(results_dict[dkey]['y_guess'])
@@ -146,10 +146,7 @@ def main(path, ml, lambdas, inner_fold=True, optim_param='auc', dattype='all_dat
                 auc_vec.append(roc_auc)
                 ax[ii, jj].plot(fpr, tpr, color=cvec[kk], alpha=.7, label=reglab[2:] +
                                 ', AUC = ' + str(roc_auc))
-            if not outer_loo:
-                print('loop ' + str(i) + ' complete')
-            else:
-                print('loop ' + str(i) + ' complete')
+
 
             auc_all.append(np.mean(auc_vec))
             auc_all_std.append(np.std(auc_vec))
@@ -216,5 +213,6 @@ if __name__ == "__main__":
     ml = mlMethods(cd.pt_info_dict, lag=1)
     ml.path = path
 
+    # main(path, ml, lambda_vector, optim_param = 'loss', dattype = 'week_one')
     main(path, ml, lambda_vector, optim_param = args.optim_type, dattype = args.data_type)
 
