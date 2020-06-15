@@ -114,7 +114,7 @@ def main(path, ml, lambdas, inner_fold=True, optim_param='auc', dattype='all_dat
                     pd.DataFrame(metabs2, vals2))
                 results_dict[dkey]['outer_run'].append(outer_run)
                 # import pdb; pdb.set_trace()
-                cvec = ['c','m','g']
+                # cvec = ['c','m','g']
                 if inner_dic is not None and inner_fold is True:
                     for ij,k in enumerate(inner_dic.keys()):
                         ax2.scatter([k],
