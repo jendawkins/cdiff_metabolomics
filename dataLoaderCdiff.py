@@ -5,7 +5,7 @@ from matplotlib import colors
 
 
 class cdiffDataLoader():
-    def __init__(self, file_name="CDiffMetabolomics.xlsx", file_name16s='Feb2018_seqtab-nochim.xlsm'):
+    def __init__(self, file_name="CDiffMetabolomics.xlsx", file_name16s='dada2-seqtab-nochim.xlsm'):
         self.filename = file_name
     
         self.xl = pd.ExcelFile(self.filename)

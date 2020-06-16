@@ -151,7 +151,7 @@ def main(path, ml, lambdas, inner_fold=True, optim_param='auc', dattype='all_dat
             auc_all.append(np.mean(auc_vec))
             auc_all_std.append(np.std(auc_vec))
             if inner_dic is not None and inner_fold is True:
-                fig2.savefig(path + dattype + '_' + optim_param + '_lambdas_w' + str(ww) + '_l' + str(reg) + '.png')
+                fig2.savefig(dattype + '_' + optim_param + '_lambdas_w' + str(ww) + '_l' + str(reg) + '.png')
 
             if dattype == 'week_one':
                 ax[ii, jj].set_title('ROC Curves, Week 1, Eventual Reurrence' + reglab +
@@ -172,7 +172,7 @@ def main(path, ml, lambdas, inner_fold=True, optim_param='auc', dattype='all_dat
 
             kk += 1
     #             plt.legend()
-    plt.savefig(path + dattype + '_' + optim_param + '_nested_lr' + str(dattype).replace('.', '_') + '.png')
+    plt.savefig(dattype + '_' + optim_param + '_nested_lr' + str(dattype).replace('.', '_') + '.png')
 
     plt.figure(figsize=(18, 10))
     plt.bar(np.arange(len(auc_all)), auc_all, yerr=auc_all_std)
@@ -185,7 +185,7 @@ def main(path, ml, lambdas, inner_fold=True, optim_param='auc', dattype='all_dat
     else: 
         plt.title("Average AUC score of 5 Outer CV Loops, Week " + str(dattype), fontsize=25)
     plt.tight_layout()
-    plt.savefig(path + dattype + '_' + optim_param + '_nested_lr2_avgAUC' +
+    plt.savefig(dattype + '_' + optim_param + '_nested_lr2_avgAUC' +
                 str(dattype).replace('.', '_') + '.png')
 
     ff = open(path + dattype + '_' + optim_param + "_output.pkl", "wb")
@@ -200,15 +200,18 @@ if __name__ == "__main__":
     filt_out = cd.filter_metabolites(40)
 
     lambda_vector = np.logspace(-3, 2, num = 50)
+    # lambda_vector = np.logspace(-3, 2, num=3)
 
     parser.add_argument("-o", "--optim_type", help="type of lambda optimization", type=str)
-    args = parser.parse_args()
 
     parser.add_argument("-dtype", "--data_type",
                         help="type of lambda optimization", type=str)
     args = parser.parse_args()
 
     path = 'outputs_june15/'
+    import os
+    if not os.path.isdir(path):
+        os.mkdir(path)
 
     ml = mlMethods(cd.pt_info_dict, lag=1)
     ml.path = path
