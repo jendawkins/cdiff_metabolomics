@@ -67,8 +67,6 @@ source activate dispatcher
 cd /PHShome/jjd65/CDIFF/cdiff_metabolomics
 
 python3 ./main_parallelized.py -dtype {0} -lambda {1} -w {2} -reg {3}
-
-python3 ./main.py -o {0} -dtype {1}
 '''
 
 # Make the directories to store the information
@@ -94,6 +92,6 @@ for dtype in dtypes:
             for reg in regularizers:
                 fname = 'cdiff_logregnet.lsf'
                 f = open(fname,'w')
-                f.write(my_str.format(dtype, lamb, w, reg, i))
+                f.write(my_str.format(dtype, lamb, w, reg))
                 f.close()
                 os.system('bsub < {}'.format(fname))

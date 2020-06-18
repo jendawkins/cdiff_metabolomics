@@ -87,12 +87,30 @@ class mlMethods():
         all_pts = np.unique([inner for outer in tmpts for inner in outer])
         self.tmpts = all_pts
         self.week = dict()
+        self.week16s = dict()
         self.targets_dict = dict()
         self.targets_dict2 = dict()
+        
+        for ii in pt_info_dict.keys():
+            for pts in pt_info_dict[ii].keys():
+                # if '16s' in pt_info_dict[ii][pts].keys():
+                #     if str(pts) + '_16s' not in self.week.keys():
+                #         self.week[str(pts) + '_16s'] = []
+                #         self.targets_dict[str(pts) + '_16s'] = []
+                #         self.targets_dict2[str(pts) + '_16s'] = []
+
+                #     self.week[str(pts) + '_16s'].append(pt_info_dict[ii][pts]['16s'])
+                #     self.targets_dict[str(pts) + '_16s'].append(pt_info_dict[ii][pts]['PATIENT STATUS (BWH)'])
+                #     self.targets_dict2[str(pts) + '_16s'].append(pt_info_dict2[ii][pts]['PATIENT STATUS (BWH)'])
+
+        for k in self.week.keys():
+            self.week[k] = pd.concat(self.week[k],1).T
+
         for pts in all_pts:
             self.week[pts] = pd.concat([pt_info_dict[i][pts]['DATA']
                                 for i in pt_info_dict.keys()
                                 if pts in pt_info_dict[i].keys()], 1).T
+
             self.targets_dict[pts] = [pt_info_dict[i][pts]['PATIENT STATUS (BWH)'] 
                                 for i in pt_info_dict.keys()
                                 if pts in pt_info_dict[i].keys()]
@@ -106,12 +124,20 @@ class mlMethods():
 
         N = 0.0
         days = [[day for day in sub if day != N] for sub in days]
+
         all_data = []
         labels = []
         labels_even = []
         patients = []
+
+        all_data16s = []
+        labels16s = []
+        labels_even16s = []
+        patients16s = []
+
+
         for i in pt_info_dict.keys():
-            
+
             if pt_info_dict[i] and len(days[i]) > 0:
                 labels.extend([pt_info_dict[i][days[i][k]]['PATIENT STATUS (BWH)'] for
                             k in range(len(days[i]))])
@@ -123,19 +149,48 @@ class mlMethods():
                     [pt_info_dict[i][days[i][k]]['DATA'] for k in range(len(days[i]))], 1))
 
                 patients.extend([i]*len(days[i]))
+                # for k in days[i]:
 
+                #     if '16s' in pt_info_dict[i][k].keys():
+                #         to_add = pt_info_dict[i][k]['PATIENT STATUS (BWH)']
+                #         labels16s.append(to_add)
+
+                #         labels_even16s.append(pt_info_dict2[i][k]['PATIENT STATUS (BWH)'])
+
+                #         all_data16s.append(
+                #             pt_info_dict[i][k]['16s'])
+
+                #         patients16s.append(i)
+                #     else:
+                #         continue
+
+            
         all_data = pd.concat(all_data, 1).T
 
         vals = [str(i) + '-' + str(patients[j])
                 for j,i in enumerate(all_data.index.values)]
         
         all_data.index = vals
+
+        # all_data16s = pd.concat(all_data16s, 1).T
+        # vals = [str(i) + '-' + str(patients16s[j])
+        #         for j, i in enumerate(all_data16s.index.values)]
+        # all_data16s.index = vals
+
         self.targets_dict['all_data'] = labels
         self.targets_dict['all_data_even'] = labels_even
         self.targets_dict['week_one'] = self.targets_dict2[1.0]
 
         self.week['all_data'] = all_data
         self.week['week_one'] = self.week[1.0]
+
+        # self.targets_dict['all_data_16s'] = labels16s
+        # self.targets_dict['all_data_even_16s'] = labels_even16s
+        # self.targets_dict['week_one_16s'] = self.targets_dict2['1.0_16s']
+
+        # self.week['all_data_16s'] = all_data16s
+        # self.week['week_one_16s'] = self.week['1.0_16s']
+
 
         self.patient_numbers = patients
         # self.week['all'] = pd.concat(all_data, 1).T
@@ -152,7 +207,10 @@ class mlMethods():
         for ls in lst:
             logdat = self.log_transform(self.week[ls])
             self.data_dict_log[ls] = logdat
-            filtdata = self.filter_vars(logdat, self.targets_dict[ls], var_type = 'total')
+            try:
+                filtdata = self.filter_vars(logdat, self.targets_dict[ls], var_type = 'total')
+            except:
+                import pdb; pdb.set_trace()
             rawfilt = self.filter_vars(
                 self.week[ls], self.targets_dict[ls], var_type='total')
             self.data_dict_raw_filt[ls] = rawfilt
@@ -670,6 +728,9 @@ class mlMethods():
         
         if loo_outer:
             assert(ixs is not None)
+
+        if isinstance(lambda_grid, int):
+            train_inner = False
 
         # Filter variances if perc is not none
         if perc is not None:

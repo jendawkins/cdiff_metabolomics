@@ -2,10 +2,11 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import colors
+import copy
 
 
 class cdiffDataLoader():
-    def __init__(self, file_name="CDiffMetabolomics.xlsx", file_name16s='dada2-seqtab-nochim.xlsm'):
+    def __init__(self, file_name="CDiffMetabolomics.xlsx", file_name16s='seqtab-nochim.xlsx'):
         self.filename = file_name
     
         self.xl = pd.ExcelFile(self.filename)
@@ -37,25 +38,26 @@ class cdiffDataLoader():
 
         self.cdiff_raw = self.cdiff_raw.iloc[1:, :]
 
-        self.raw16s = pd.ExcelFile(file_name16s)
-        self.raw16s = self.raw16s.parse()
+        # self.raw16s = pd.ExcelFile(file_name16s)
+        # self.raw16s = self.raw16s.parse()
 
-        dcols = ['-'.join(x.split('-')[1:])
-                 for x in self.raw16s.columns.values[1:]]
-        dcol = []
-        for x in dcols:
-            if len(x.split('-')[1]) == 2:
-                dcol.append('.'.join([x[:5], x[-1]]))
-            else:
-                dcol.append(x)
-        dcols = dcol
-        self.data16s = pd.DataFrame(
-            np.array(self.raw16s.iloc[:, 1:]), columns=dcols, index=self.raw16s.iloc[:, 0])
+        # dcols = ['-'.join(x.split('-')[1:])
+        #          for x in self.raw16s.columns.values[1:]]
+        # dcol = []
+        # for x in dcols:
+        #     if len(x.split('-')[1]) == 2:
+        #         dcol.append('.'.join([x[:5], x[-1]]))
+        #     else:
+        #         dcol.append(x)
+        # dcols = dcol
+        # self.data16s = pd.DataFrame(
+        #     np.array(self.raw16s.iloc[:, 1:]), columns=dcols, index=self.raw16s.iloc[:, 0])
 
-        self.data16s = self.make_proportions(self.data16s)
+        # self.data16s = self.make_proportions(self.data16s)
 
         self.make_pt_dict(self.cdiff_raw)
-        self.pt_info_dict = self.add_16s_to_info_dict(self.data16s, self.pt_info_dict)
+        filt_out = self.filter_metabolites(40)
+        # self.all_16s_info_dict = self.add_16s_to_info_dict(self.data16s, self.pt_info_dict)
 
         # self.info_dict_16s = self.make_16s_dict(self.data16s)
 
@@ -146,16 +148,21 @@ class cdiffDataLoader():
                     {'DATA': cdiff_raw_sm.iloc[:, j]})
 
     def add_16s_to_info_dict(self, data16s, pt_info_dict):
-        
+        pt_info_dict_all16s = copy.deepcopy(pt_info_dict)
         for key in pt_info_dict.keys():
             for tmpt in pt_info_dict[key].keys():
                 pt_label = pt_info_dict[key][tmpt]['CLIENT SAMPLE ID']
                 try:
                     col_16s = data16s[pt_label]
                     pt_info_dict[key][tmpt]['16s'] = col_16s
+                    pt_info_dict_all16s[key][tmpt]['16s'] = col_16s
                 except:
-                    continue
-        return pt_info_dict
+                    if key not in pt_info_dict_all16s.keys():
+                        pt_info_dict_all16s[key] = {}
+                    if tmpt not in pt_info_dict_all16s[key].keys():
+                        pt_info_dict_all16s[key][tmpt] = {}
+                    pt_info_dict_all16s[key][tmpt]['16s'] = col_16s
+        return pt_info_dict_all16s
     
     def make_proportions(self, data):
         total_counts = np.sum(data, 0)
