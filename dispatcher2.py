@@ -4,6 +4,7 @@ import shutil
 import argparse
 from dataLoaderCdiff import *
 from ml_methods import *
+import pickle
 
 my_str = '''
 #!/bin/bash
@@ -92,7 +93,6 @@ weights = [True, False]
 regularizers = [1,2]
 lambda_vector = np.logspace(-3, 2, num=50)
 
-outer_loops = len(ixx)
 for dtype in dtypes:
     ixx = ml.leave_one_out_cv(ml.data_dict[dtype], ml.targets_int[dtype])
     pickle.dump(ixx, open(dtype + "_ixx.pkl", "wb"))
