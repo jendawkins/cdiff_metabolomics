@@ -103,7 +103,6 @@ if __name__ == "__main__":
     parser.add_argument("-w", "--weighting",
                         help="weighting", type=bool)
         
-    parser.add_argument("-hoi","--hold_out_ix", help = "index to hold out for inner loop", type = int)
     args = parser.parse_args()
 
     ml = mlMethods(cd.pt_info_dict, lag=1)
@@ -117,30 +116,33 @@ if __name__ == "__main__":
         os.mkdir(path)
     ml.path = path
     try:
-        with open(args.dtype + '_ixs.pkl', 'rb') as f:
+        with open(args.data_type + '_ixs.pkl', 'rb') as f:
             ixx = pickle.load(f)
     except:
         ixx = ml.leave_one_out_cv(data, labels)
         pickle.dump(ixx, open(path + "ixs.pkl", "wb"))
-    
-    ix_in = ixx[args.hold_out_ix]
-    ixtrain, ixtest = ix_in
 
-    TRAIN, TRAIN_L, TEST, TEST_L = data.iloc[ixtrain,
-                                             :], labels[ixtrain], data.iloc[ixtest, :], labels[ixtest]
+    outer_loops = len(ixx)
+    for i in range(outer_loops):
+        ix_in = ixx[i]
+        ixtrain, ixtest = ix_in
 
-    epochs = 1000
+        TRAIN, TRAIN_L, TEST, TEST_L = data.iloc[ixtrain,
+                                                :], labels[ixtrain], data.iloc[ixtest, :], labels[ixtest]
 
-    try:
-        with open(path + args.dattype + '_' + args.weighting + '_' + args.regularizer + '_inner_dic.pkl', 'rb') as f:
-            inner_dic = pickle.load(f)
-    except:
-        inner_dic = {}
-    zip_ixs = ml.leave_one_out_cv(TRAIN, TRAIN_L)
-    net = LogRegNet(TRAIN.shape[1])
-    optimizer = torch.optim.RMSprop(net.parameters(), lr=.0001)
-    inner_dic = main_parallelized(ml, args.lambda_val, zip_ixs, net, optimizer, TRAIN,
-                      TRAIN_L, epochs, args.weighting, args.regularizer, inner_dic)
+        epochs = 1000
 
-    pickle.dump(inner_dic, open(path + args.dattype + '_' +
-                                args.weighting + '_' + args.regularizer + "inner_dic.pkl", "wb"))
+        try:
+            with open(path + args.data_type + '_' + str(args.weighting) + '_' + str(args.regularizer) + '_inner_dic.pkl', 'rb') as f:
+                inner_dic = pickle.load(f)
+        except:
+            inner_dic = {}
+        zip_ixs = ml.leave_one_out_cv(TRAIN, TRAIN_L)
+        net = LogRegNet(TRAIN.shape[1])
+        optimizer = torch.optim.RMSprop(net.parameters(), lr=.0001)
+        inner_dic = main_parallelized(ml, args.lambda_val, zip_ixs, net, optimizer, TRAIN,
+                        TRAIN_L, epochs, args.weighting, args.regularizer, inner_dic)
+
+        pickle.dump(inner_dic, open(path + args.data_type + '_' +
+                                    str(args.weighting) + '_' + str(args.regularizer) + "inner_dic.pkl", "wb"))
+        print('loop ' + str(i) +' Complete')

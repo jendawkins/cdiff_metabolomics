@@ -2,8 +2,6 @@ import numpy as np
 import os
 import shutil
 import argparse
-from dataLoaderCdiff import *
-from ml_methods import *
 import pickle
 
 my_str = '''
@@ -68,7 +66,7 @@ source activate dispatcher
 
 cd /PHShome/jjd65/CDIFF/cdiff_metabolomics
 
-python3 ./main_parallelized.py -dtype {0} -lambda {1} -w {pyt2} -reg {3} -hoi {4}
+python3 ./main_parallelized.py -dtype {0} -lambda {1} -w {2} -reg {3}
 
 python3 ./main.py -o {0} -dtype {1}
 '''
@@ -84,9 +82,6 @@ python3 ./main.py -o {0} -dtype {1}
 
 # options = ['auc', 'f1', 'loss']
 
-cd = cdiffDataLoader()
-cd.make_pt_dict(cd.cdiff_raw)
-ml=mlMethods(cd.pt_info_dict, lag=1)
 
 dtypes = ['week_one', 'all_data']
 weights = [True, False]
@@ -94,15 +89,11 @@ regularizers = [1,2]
 lambda_vector = np.logspace(-3, 2, num=50)
 
 for dtype in dtypes:
-    ixx = ml.leave_one_out_cv(ml.data_dict[dtype], ml.targets_int[dtype])
-    pickle.dump(ixx, open(dtype + "_ixx.pkl", "wb"))
-    outer_loops = len(ixx)
-    for i in range(outer_loops):
-        for lamb in labmda_vector:
-            for w in weights:
-                for reg in regularizers:
-                    fname = 'cdiff_logregnet.lsf'
-                    f = open(fname,'w')
-                    f.write(my_str.format(dtype, lamb, w, reg, i))
-                    f.close()
-                    os.system('bsub < {}'.format(fname))
+    for lamb in lambda_vector:
+        for w in weights:
+            for reg in regularizers:
+                fname = 'cdiff_logregnet.lsf'
+                f = open(fname,'w')
+                f.write(my_str.format(dtype, lamb, w, reg, i))
+                f.close()
+                os.system('bsub < {}'.format(fname))
