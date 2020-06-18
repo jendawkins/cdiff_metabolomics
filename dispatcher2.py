@@ -2,6 +2,7 @@ import numpy as np
 import os
 import shutil
 import argparse
+from dataLoaderCdiff import *
 from ml_methods import *
 
 my_str = '''
@@ -81,12 +82,16 @@ python3 ./main.py -o {0} -dtype {1}
 #    os.mkdir(basepath)
 
 # options = ['auc', 'f1', 'loss']
+
+cd = cdiffDataLoader()
+cd.make_pt_dict(cd.cdiff_raw)
+ml=mlMethods(cd.pt_info_dict, lag=1)
+
 dtypes = ['week_one', 'all_data']
 weights = [True, False]
 regularizers = [1,2]
 lambda_vector = np.logspace(-3, 2, num=50)
 
-ixx = ml.leave_one_out_cv(data_in, targets)
 outer_loops = len(ixx)
 for dtype in dtypes:
     ixx = ml.leave_one_out_cv(ml.data_dict[dtype], ml.targets_int[dtype])
@@ -96,7 +101,7 @@ for dtype in dtypes:
         for lamb in labmda_vector:
             for w in weights:
                 for reg in regularizers:
-                    fname = 'cdiff_logregnet' + dtype + str(i) + str(lamb).replace('.'.'_') + str(w) + str(reg) + '.lsf'
+                    fname = 'cdiff_logregnet.lsf'
                     f = open(fname,'w')
                     f.write(my_str.format(dtype, lamb, w, reg, i))
                     f.close()
