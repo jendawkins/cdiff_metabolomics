@@ -91,8 +91,8 @@ class mlMethods():
         self.targets_dict = dict()
         self.targets_dict2 = dict()
         
-        for ii in pt_info_dict.keys():
-            for pts in pt_info_dict[ii].keys():
+        # for ii in pt_info_dict.keys():
+        #     for pts in pt_info_dict[ii].keys():
                 # if '16s' in pt_info_dict[ii][pts].keys():
                 #     if str(pts) + '_16s' not in self.week.keys():
                 #         self.week[str(pts) + '_16s'] = []
