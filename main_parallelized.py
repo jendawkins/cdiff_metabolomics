@@ -132,7 +132,7 @@ if __name__ == "__main__":
     epochs = 1000
 
     try:
-        with open(path + 'inner_dic.pkl', 'rb') as f:
+        with open(path + args.dattype + '_' + args.weighting + '_' + args.regularizer + '_inner_dic.pkl', 'rb') as f:
             inner_dic = pickle.load(f)
     except:
         inner_dic = {}
@@ -142,4 +142,5 @@ if __name__ == "__main__":
     inner_dic = main_parallelized(ml, args.lambda_val, zip_ixs, net, optimizer, TRAIN,
                       TRAIN_L, epochs, args.weighting, args.regularizer, inner_dic)
 
-    pickle.dump(inner_dic, open(path + "inner_dic.pkl", "wb"))
+    pickle.dump(inner_dic, open(path + args.dattype + '_' +
+                                args.weighting + '_' + args.regularizer + "inner_dic.pkl", "wb"))
