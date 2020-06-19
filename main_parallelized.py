@@ -101,9 +101,14 @@ if __name__ == "__main__":
                         help="regularizer", type=int)
     
     parser.add_argument("-w", "--weighting",
-                        help="weighting", type=bool)
+                        help="weighting", type=str)
         
     args = parser.parse_args()
+
+    if args.weighting == 'False':
+        weights = False
+    if args.weighting == 'True':
+        weights = True
 
     ml = mlMethods(cd.pt_info_dict, lag=1)
     
@@ -141,8 +146,9 @@ if __name__ == "__main__":
         net = LogRegNet(TRAIN.shape[1])
         optimizer = torch.optim.RMSprop(net.parameters(), lr=.0001)
         inner_dic = main_parallelized(ml, args.lambda_val, zip_ixs, net, optimizer, TRAIN,
-                        TRAIN_L, epochs, args.weighting, args.regularizer, inner_dic)
+                        TRAIN_L, epochs, weights, args.regularizer, inner_dic)
 
+        print(args.weighting)
         pickle.dump(inner_dic, open(path + args.data_type + '_' +
                                     str(args.weighting) + '_' + str(args.regularizer) + "inner_dic.pkl", "wb"))
         print('loop ' + str(i) +' Complete')
