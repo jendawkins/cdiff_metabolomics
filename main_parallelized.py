@@ -37,7 +37,7 @@ def main_parallelized(ml, lamb, zip_ixs, net, optimizer, TRAIN, TRAIN_L, epochs,
         running_vec = []
         for epoch in range(epochs):
 
-            out = ml.train_loop(X_train, y_train, net,
+            out, loss = ml.train_loop(X_train, y_train, net,
                             optimizer, criterion, lamb, regularizer)
     
             
@@ -49,22 +49,22 @@ def main_parallelized(ml, lamb, zip_ixs, net, optimizer, TRAIN, TRAIN_L, epochs,
                 y_test_per_epoch.append(y_test)
                 y_guess_per_epoch.append(y_guess)
 
-                running_vec.append(test_loss)
+                running_vec.append(loss)
                 if len(running_vec) > 12:
-                    bool_test = np.array([r1 >= r2 for r1, r2 in zip(
-                            running_vec[-10:], running_vec[-11:-1])]).all()
+                    bool_test = np.abs(running_vec[-1] - running_vec[-2])<=1e-4
                 # perform early stopping if greater than 50 epochs and if either loss is increasing over the past 10 iterations or auc / f1 is decreasing over the past 10 iterations
                 if (len(running_vec) > 12 and bool_test):
-                    y_test_vec.append(y_test_per_epoch[-11])
-                    y_guess_vec.append(y_guess_per_epoch[-11])
+                    y_test_vec.append(y_test_per_epoch[-2])
+                    y_guess_vec.append(y_guess_per_epoch[-2])
                     test_running_loss += test_loss
                     # add record of lambda and lowest loss or highest auc/f1 associated with that lambda at this epoch
                     break
 
-    if len(y_test_vec) ==1:
-        y_test_vec.append(y_test_per_epoch[-11])
-        y_guess_vec.append(y_guess_per_epoch[-11])
+    # if len(y_test_vec) ==1:
+        y_test_vec.append(y_test_per_epoch[-2])
+        y_guess_vec.append(y_guess_per_epoch[-2])
         test_running_loss += test_loss
+    # import pdb; pdb.set_trace()
     y_guess_mat = np.concatenate(y_guess_vec)
     y_pred_mat = np.argmax(y_guess_mat, 1)
     if len(y_test_vec) < y_guess_mat.shape[0]:
@@ -102,6 +102,12 @@ if __name__ == "__main__":
     
     parser.add_argument("-w", "--weighting",
                         help="weighting", type=str)
+
+    parser.add_argument("-lr", "--learning_rate",
+                        help="weighting", type=float)
+                
+    parser.add_argument("-epoch", "--epochs",
+                        help="weighting", type=int)
         
     args = parser.parse_args()
 
@@ -115,7 +121,7 @@ if __name__ == "__main__":
     data = ml.data_dict[args.data_type]
     labels = ml.targets_int[args.data_type]
 
-    path = 'outputs_june18/'
+    path = 'outputs_june25/'
     import os
     if not os.path.isdir(path):
         os.mkdir(path)
@@ -135,20 +141,20 @@ if __name__ == "__main__":
         TRAIN, TRAIN_L, TEST, TEST_L = data.iloc[ixtrain,
                                                 :], labels[ixtrain], data.iloc[ixtest, :], labels[ixtest]
 
-        epochs = 1000
-
-        try:
-            with open(path + args.data_type + '_' + str(args.weighting) + '_' + str(args.regularizer) + '_inner_dic.pkl', 'rb') as f:
+        name = path + args.data_type + '_' + str(args.weighting) + '_' + str(
+            args.regularizer) + str(args.learning_rate).replace('.', '') + str(args.epochs) + 'inner_dic.pkl'
+        if i !=0:
+            with open(name, 'rb') as f:
                 inner_dic = pickle.load(f)
-        except:
+        else:
+            print('couldnt find dic')
             inner_dic = {}
         zip_ixs = ml.leave_one_out_cv(TRAIN, TRAIN_L)
         net = LogRegNet(TRAIN.shape[1])
-        optimizer = torch.optim.RMSprop(net.parameters(), lr=.0001)
+        optimizer = torch.optim.RMSprop(net.parameters(), lr=args.learning_rate)
         inner_dic = main_parallelized(ml, args.lambda_val, zip_ixs, net, optimizer, TRAIN,
-                        TRAIN_L, epochs, weights, args.regularizer, inner_dic)
+                        TRAIN_L, args.epochs, weights, args.regularizer, inner_dic)
 
         print(args.weighting)
-        pickle.dump(inner_dic, open(path + args.data_type + '_' +
-                                    str(args.weighting) + '_' + str(args.regularizer) + "inner_dic.pkl", "wb"))
+        pickle.dump(inner_dic, open(name, "wb"))
         print('loop ' + str(i) +' Complete')

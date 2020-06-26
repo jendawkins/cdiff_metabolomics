@@ -66,7 +66,7 @@ source activate dispatcher
 
 cd /PHShome/jjd65/CDIFF/cdiff_metabolomics
 
-python3 ./main_parallelized.py -dtype {0} -lambda {1} -w {2} -reg {3}
+python3 ./main_parallelized.py -dtype {0} -lambda {1} -w {2} -reg {3} -lr {4} -epochs {5}
 '''
 
 # Make the directories to store the information
@@ -83,15 +83,19 @@ python3 ./main_parallelized.py -dtype {0} -lambda {1} -w {2} -reg {3}
 
 dtypes = ['week_one', 'all_data']
 weights = [True, False]
-regularizers = [1,2]
-lambda_vector = np.logspace(-3, 2, num=50)
+regularizers = [1, None]
+epoch_vec = [100,200]
+learning_rates = [.1,.01,.001,.0001]
+lambda_vector = np.logspace(-1, 3, num=50)
 
 for dtype in dtypes:
     for lamb in lambda_vector:
         for w in weights:
             for reg in regularizers:
-                fname = 'cdiff_logregnet.lsf'
-                f = open(fname,'w')
-                f.write(my_str.format(dtype, lamb, w, reg))
-                f.close()
-                os.system('bsub < {}'.format(fname))
+                for lr in learning_rates:
+                    for epoch in epoch_vec:
+                        fname = 'cdiff_logregnet.lsf'
+                        f = open(fname,'w')
+                        f.write(my_str.format(dtype, lamb, w, reg, lr, epoch))
+                        f.close()
+                        os.system('bsub < {}'.format(fname))

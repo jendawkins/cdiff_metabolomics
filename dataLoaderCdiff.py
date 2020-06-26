@@ -6,7 +6,7 @@ import copy
 
 
 class cdiffDataLoader():
-    def __init__(self, file_name="CDiffMetabolomics.xlsx", file_name16s='seqtab-nochim.xlsx'):
+    def __init__(self, file_name="CDiffMetabolomics.xlsx", file_name16s='dada2-seqtab-nochim.xlsx'):
         self.filename = file_name
     
         self.xl = pd.ExcelFile(self.filename)
@@ -38,64 +38,39 @@ class cdiffDataLoader():
 
         self.cdiff_raw = self.cdiff_raw.iloc[1:, :]
 
-        # self.raw16s = pd.ExcelFile(file_name16s)
-        # self.raw16s = self.raw16s.parse()
+        colnames = [x[4] for x in self.cdiff_raw.columns.values]
+        self.cdiff_data = pd.DataFrame(np.array(self.cdiff_raw), columns=colnames)
 
-        # dcols = ['-'.join(x.split('-')[1:])
-        #          for x in self.raw16s.columns.values[1:]]
-        # dcol = []
-        # for x in dcols:
-        #     if len(x.split('-')[1]) == 2:
-        #         dcol.append('.'.join([x[:5], x[-1]]))
-        #     else:
-        #         dcol.append(x)
-        # dcols = dcol
-        # self.data16s = pd.DataFrame(
-        #     np.array(self.raw16s.iloc[:, 1:]), columns=dcols, index=self.raw16s.iloc[:, 0])
+        self.raw16s = pd.ExcelFile(file_name16s)
+        self.raw16s = self.raw16s.parse()
 
-        # self.data16s = self.make_proportions(self.data16s)
+        self.labels16s_dict = {101:0,102:0,103:0,105:1,106:0,108:1,109:0,114:0,115:0,116:0,119:1,120:1,121:1,123:0,124:1,\
+            126:0,127:0,129:0,130:1,131:0,132:0,133:0,134:1,136:1,138:0,139:0,140:0,141:1,142:0,143:1,144:0,145:0,146:1,147:0,148:1,\
+                149:1,150:0,151:0,152:0,153:0,155:0,156:1,158:1,160:0,161:1,162:1,163:1,165:1,167:1,168:'g',169:'g',170:'g',171:'g',\
+                    173:1,174:'g',175:'g',107:'b',117:'b',118:'b',164:'b'}
 
-        self.make_pt_dict(self.cdiff_raw)
-        filt_out = self.filter_metabolites(40)
-        # self.all_16s_info_dict = self.add_16s_to_info_dict(self.data16s, self.pt_info_dict)
-
-        # self.info_dict_16s = self.make_16s_dict(self.data16s)
-
-        
-    def make_16s_dict(self, data, ixs = None):
-
-        pt_names = [x.split('-')[0] for x in data.columns.names]
-        pts = []
-        for i, n in enumerate(np.unique(pt_names)):
-            pts.extend([str(i+1) + '.' + str(j)
-                        for j in range(len(np.where(pt_names == n)[0]))])
-
-        ts = np.array([x.split('-')[1] for h in data.columns.names])
-        self.times = []
-        for el in ts:
-            self.times.append(float(el))
-
-        if idxs is None:
-            cdiff_raw_sm = data
-        else:
-            cdiff_raw_sm = data.iloc[idxs,:]
-
-        self.pt_info_dict = {}
-        pt_key = 0
-
-        pt_full_names = data.columns.names
-        self.pt_info_dict[pt_full_names[pt_key]] = {}
-
-        for j in range(len(data.columns.names)):
-            if j != 0 and pt_names[j] != pt_names[j-1]:
-                pt_key += 1
-                self.pt_info_dict[pt_full_names[pt_key]] = {}
-                self.pt_info_dict[pt_full_names[pt_key]][self.times[j]].update(cdiff_raw_sm.iloc[:,j])
-
+        self.cl_dict = {0:'Cleared',1:'Recur','g':'Unknown','b':'Unknown'}
+        dcols = ['-'.join(x.split('-')[1:])
+                 for x in self.raw16s.columns.values[1:]]
+        dcol = []
+        for x in dcols:
+            if len(x.split('-')[1]) == 2:
+                dcol.append('.'.join([x[:5], x[-1]]))
             else:
-                self.pt_info_dict[pt_full_names[pt_key]][self.times[j]].update(
-                    {'DATA': cdiff_raw_sm.iloc[:, j]})
+                dcol.append(x)
+        dcols = dcol
+        self.data16s = pd.DataFrame(
+            np.array(self.raw16s.iloc[:, 1:]), columns=dcols, index=self.raw16s.iloc[:, 0])
 
+        self.data16s = self.make_proportions(self.data16s)
+
+        self.make_pt_dict(self.cdiff_data)
+        self.metabolome_pts = np.concatenate(
+            [[self.pt_info_dict[i][k]['CLIENT SAMPLE ID'] for k in self.pt_info_dict[i].keys()] for i in self.pt_info_dict.keys()])
+        self.microbiome_pts = dcols
+        filt_out = self.filter_metabolites(40)
+        self.all_16s_info_dict = self.add_16s_to_info_dict(self.data16s, self.pt_info_dict)
+        # self.info_dict_16s = self.make_16s_dict(self.data16s)
 
     def make_pt_dict(self, data, idxs=None):
 
@@ -114,7 +89,7 @@ class cdiffDataLoader():
         idx_num = np.where(np.array(self.row_labels) == 'BIOCHEMICAL')[0][0]
         idx_val = [r[idx_num] for r in self.row_names]
         if idxs is None:
-            cdiff_raw_sm = pd.DataFrame(np.array(data),index = idx_val)
+            cdiff_raw_sm = data
             cdiff_raw_sm = cdiff_raw_sm.fillna(0)
             # import pdb
             # pdb.set_trace()
@@ -128,13 +103,13 @@ class cdiffDataLoader():
 
         self.data_sm = cdiff_raw_sm
         self.pt_info_dict = {}
-        pt_key = 0
+        pt_key = pt_names[0]
         self.pt_info_dict[pt_key] = {}
         
 
         for j in range(len(self.header_names)):
             if j != 0 and pt_names[j] != pt_names[j-1]:
-                pt_key += 1
+                pt_key = pt_names[j]
                 self.pt_info_dict[pt_key] = {}
                 self.pt_info_dict[pt_key][self.times[j]] = {
                     self.header_labels[i]: self.header_names[j][i] for i in range(len(self.header_labels))}
@@ -149,19 +124,43 @@ class cdiffDataLoader():
 
     def add_16s_to_info_dict(self, data16s, pt_info_dict):
         pt_info_dict_all16s = copy.deepcopy(pt_info_dict)
-        for key in pt_info_dict.keys():
-            for tmpt in pt_info_dict[key].keys():
-                pt_label = pt_info_dict[key][tmpt]['CLIENT SAMPLE ID']
+        all_pts = np.unique(list(self.cdiff_data)+ list(self.data16s))
+        for key in all_pts:
+            key_pt = key.split('-')[0]
+            key_tmpt = float(key.split('-')[1])
+            if key_pt in pt_info_dict.keys() and key_tmpt in pt_info_dict[key_pt].keys():
+                pt_label = key
                 try:
                     col_16s = data16s[pt_label]
-                    pt_info_dict[key][tmpt]['16s'] = col_16s
-                    pt_info_dict_all16s[key][tmpt]['16s'] = col_16s
+                    pt_info_dict[key_pt][key_tmpt]['16s'] = col_16s
+                    pt_info_dict_all16s[key_pt][key_tmpt]['16s'] = col_16s
                 except:
-                    if key not in pt_info_dict_all16s.keys():
-                        pt_info_dict_all16s[key] = {}
-                    if tmpt not in pt_info_dict_all16s[key].keys():
-                        pt_info_dict_all16s[key][tmpt] = {}
-                    pt_info_dict_all16s[key][tmpt]['16s'] = col_16s
+                    continue
+                    # if key_pt not in pt_info_dict_all16s.keys():
+                    #     pt_info_dict_all16s[key_pt] = {}
+                    # if key_tmpt not in pt_info_dict_all16s[key_pt].keys():
+                    #     pt_info_dict_all16s[key_pt][key_tmpt] = {}
+                    # if pt_label in data16s.columns.values:
+                    #     col_16s = data16s[pt_label]
+                    #     pt_info_dict_all16s[key_pt][key_tmpt]['16s'] = col_16s
+            else:
+                # if key_pt == '101':
+                #     import pdb; pdb.set_trace()
+                pt_label = key
+                col_16s = data16s[pt_label]
+                try:
+                    pt_info_dict[key_pt][key_tmpt]['16s'] = col_16s
+                    pt_info_dict_all16s[key_pt][key_tmpt]['16s'] = col_16s
+                except:
+                    if key_pt not in pt_info_dict_all16s.keys():
+                        pt_info_dict_all16s[key_pt] = {}
+                    if key_tmpt not in pt_info_dict_all16s[key_pt].keys():
+                        pt_info_dict_all16s[key_pt][key_tmpt] = {}
+                    pt_info_dict_all16s[key_pt][key_tmpt]['16s'] = col_16s
+                lab = self.labels16s_dict[int(pt_label.split('-')[0])]
+                label = self.cl_dict[lab]
+                pt_info_dict_all16s[key_pt][key_tmpt]['PATIENT STATUS (BWH)'] = label
+
         return pt_info_dict_all16s
     
     def make_proportions(self, data):

@@ -57,7 +57,15 @@ class mlMethods():
     def __init__(self, pt_info_dict_orig, lag = 1, option = 2):
         new_info_dict = copy.deepcopy(pt_info_dict_orig)
         new_info_dict2 = copy.deepcopy(pt_info_dict_orig)
-        for patient in new_info_dict:
+
+        # Change labels to be recur only at week before recurrence and cleared all other times and 
+        # remove patients who don't have timepoint 1.0
+        iterable_dict = copy.deepcopy(new_info_dict)
+        for patient in iterable_dict:
+            if 1.0 not in new_info_dict[patient].keys():
+                new_info_dict.pop(patient)
+                new_info_dict2.pop(patient)
+                continue
             if new_info_dict[patient][1.0]['PATIENT STATUS (BWH)']=='Recur':
                 tmpts = list(new_info_dict[patient].keys())
                 num_labels = len(tmpts)-lag
@@ -81,7 +89,6 @@ class mlMethods():
             pt_info_dict = new_info_dict
             pt_info_dict2 = new_info_dict2
         
-
         tmpts = [list(pt_info_dict[i].keys())
                 for i in pt_info_dict.keys()]
         all_pts = np.unique([inner for outer in tmpts for inner in outer])
@@ -93,24 +100,34 @@ class mlMethods():
         
         # for ii in pt_info_dict.keys():
         #     for pts in pt_info_dict[ii].keys():
-                # if '16s' in pt_info_dict[ii][pts].keys():
-                #     if str(pts) + '_16s' not in self.week.keys():
-                #         self.week[str(pts) + '_16s'] = []
-                #         self.targets_dict[str(pts) + '_16s'] = []
-                #         self.targets_dict2[str(pts) + '_16s'] = []
+        #         if '16s' in pt_info_dict[ii][pts].keys():
+        #             if str(pts) + '_16s_only' not in self.week.keys():
+        #                 self.week[str(pts) + '_16s_only'] = []
+        #                 self.targets_dict[str(pts) + '_16s_only'] = []
+        #                 self.targets_dict2[str(pts) + '_16s_only'] = []
 
-                #     self.week[str(pts) + '_16s'].append(pt_info_dict[ii][pts]['16s'])
-                #     self.targets_dict[str(pts) + '_16s'].append(pt_info_dict[ii][pts]['PATIENT STATUS (BWH)'])
-                #     self.targets_dict2[str(pts) + '_16s'].append(pt_info_dict2[ii][pts]['PATIENT STATUS (BWH)'])
+        #             self.week[str(pts) + '_16s_only'].append(pt_info_dict[ii][pts]['16s'])
+        #             self.targets_dict[str(pts) + '_16s_only'].append(pt_info_dict[ii][pts]['PATIENT STATUS (BWH)'])
+        #             self.targets_dict2[str(pts) + '_16s_only'].append(pt_info_dict2[ii][pts]['PATIENT STATUS (BWH)'])
+        #         if '16s' in pt_info_dict[ii][pts].keys() and 'DATA' in pt_info_dict[ii][pts].keys():
+        #             if str(pts) + '_16s' not in self.week.keys():
+        #                 self.week[str(pts) + '_16s'] = []
+        #                 self.targets_dict[str(pts) + '_16s'] = []
+        #                 self.targets_dict2[str(pts) + '_16s'] = []
 
-        for k in self.week.keys():
-            self.week[k] = pd.concat(self.week[k],1).T
+        #             self.week[str(pts) + '_16s'].append(pt_info_dict[ii][pts]['16s'])
+        #             self.targets_dict[str(pts) + '_16s'].append(pt_info_dict[ii][pts]['PATIENT STATUS (BWH)'])
+        #             self.targets_dict2[str(pts) + '_16s'].append(pt_info_dict2[ii][pts]['PATIENT STATUS (BWH)'])
+
+        
 
         for pts in all_pts:
             self.week[pts] = pd.concat([pt_info_dict[i][pts]['DATA']
                                 for i in pt_info_dict.keys()
                                 if pts in pt_info_dict[i].keys()], 1).T
 
+            # indexes = [i + '-1' for i in pt_info_dict.keys() if pts in pt_info_dict[i].keys()]
+            # self.week[pts] = pd.DataFrame(self.week[pts], index = indexes)
             self.targets_dict[pts] = [pt_info_dict[i][pts]['PATIENT STATUS (BWH)'] 
                                 for i in pt_info_dict.keys()
                                 if pts in pt_info_dict[i].keys()]
@@ -118,6 +135,13 @@ class mlMethods():
             self.targets_dict2[pts] = [pt_info_dict2[i][pts]['PATIENT STATUS (BWH)']
                                            for i in pt_info_dict2.keys()
                                            if pts in pt_info_dict2[i].keys()]
+
+        
+        for k in self.week.keys():
+            try:
+                self.week[k] = pd.concat(self.week[k], 1).T
+            except:
+                continue
 
         days = [sorted(list(pt_info_dict[i].keys()))
                 for i in pt_info_dict.keys()]
@@ -135,23 +159,29 @@ class mlMethods():
         labels_even16s = []
         patients16s = []
 
+        all_data16s_only = []
+        labels16s_only = []
+        labels_even16s_only = []
+        patients16s_only = []
 
-        for i in pt_info_dict.keys():
+        iterable_dict = copy.deepcopy(pt_info_dict)
 
-            if pt_info_dict[i] and len(days[i]) > 0:
-                labels.extend([pt_info_dict[i][days[i][k]]['PATIENT STATUS (BWH)'] for
-                            k in range(len(days[i]))])
+        for it, i in enumerate(iterable_dict.keys()):
 
-                labels_even.extend([pt_info_dict2[i][days[i][k]]['PATIENT STATUS (BWH)'] for
-                                    k in range(len(days[i]))])
+            if pt_info_dict[i] and len(days[it]) > 0:
+                labels.extend([pt_info_dict[i][days[it][k]]['PATIENT STATUS (BWH)'] for
+                            k in range(len(days[it]))])
+
+                labels_even.extend([pt_info_dict2[i][days[it][k]]['PATIENT STATUS (BWH)'] for
+                                    k in range(len(days[it]))])
 
                 all_data.append(pd.concat(
-                    [pt_info_dict[i][days[i][k]]['DATA'] for k in range(len(days[i]))], 1))
+                    [pt_info_dict[i][days[it][k]]['DATA'] for k in range(len(days[it]))], 1))
 
-                patients.extend([i]*len(days[i]))
-                # for k in days[i]:
+                patients.extend([i]*len(days[it]))
+                # for k in days[it]:
 
-                #     if '16s' in pt_info_dict[i][k].keys():
+                #     if '16s' in pt_info_dict[i][k].keys() and 'DATA' in pt_info_dict[i][k].keys():
                 #         to_add = pt_info_dict[i][k]['PATIENT STATUS (BWH)']
                 #         labels16s.append(to_add)
 
@@ -161,21 +191,32 @@ class mlMethods():
                 #             pt_info_dict[i][k]['16s'])
 
                 #         patients16s.append(i)
-                #     else:
-                #         continue
+                #     if '16s' in pt_info_dict[i][k].keys() and 'DATA' in pt_info_dict[i][k].keys():
+                #         to_add = pt_info_dict[i][k]['PATIENT STATUS (BWH)']
+                #         labels16s_only.append(to_add)
+
+                #         labels_even16s_only.append(pt_info_dict2[i][k]['PATIENT STATUS (BWH)'])
+
+                #         all_data16s_only.append(
+                #             pt_info_dict[i][k]['16s'])
+
+                #         patients16s_only.append(i)
+            else:
+                pt_info_dict.pop(i)
 
             
         all_data = pd.concat(all_data, 1).T
 
-        vals = [str(i) + '-' + str(patients[j])
+        vals = [str(patients[j]) + '-' + str(np.concatenate(days)[j]).replace('.0','')
                 for j,i in enumerate(all_data.index.values)]
         
         all_data.index = vals
 
         # all_data16s = pd.concat(all_data16s, 1).T
-        # vals = [str(i) + '-' + str(patients16s[j])
-        #         for j, i in enumerate(all_data16s.index.values)]
-        # all_data16s.index = vals
+
+
+        # all_data16s_only = pd.concat(all_data16s_only, 1).T
+
 
         self.targets_dict['all_data'] = labels
         self.targets_dict['all_data_even'] = labels_even
@@ -191,12 +232,21 @@ class mlMethods():
         # self.week['all_data_16s'] = all_data16s
         # self.week['week_one_16s'] = self.week['1.0_16s']
 
+        # self.targets_dict['all_data_16s_only'] = labels16s_only
+        # self.targets_dict['all_data_even_16s_only'] = labels_even16s_only
+        # self.targets_dict['week_one_16s_only'] = self.targets_dict2['1.0_16s_only']
+
+        # self.week['all_data_16s_only'] = all_data16s_only
+        # self.week['week_one_16s_only'] = self.week['1.0_16s_only']
+
+
 
         self.patient_numbers = patients
-        # self.week['all'] = pd.concat(all_data, 1).T
-        # self.targets_orig = [pt_info_dict[i][1.0]
-        #                 ['PATIENT STATUS (BWH)'] for i in pt_info_dict.keys()]
-        # self.targets_all_orig = labels
+        # self.week['all'] = all_data
+        # import pdb; pdb.set_trace()
+        self.targets_orig = [pt_info_dict[i][1.0]
+                        ['PATIENT STATUS (BWH)'] for i in pt_info_dict.keys()]
+        self.targets_all_orig = labels
 
         lst = list(self.week.keys())
         self.data_dict_raw = {}
@@ -219,6 +269,12 @@ class mlMethods():
             self.targets_int[ls] = (
                 np.array(self.targets_dict[ls]) == 'Recur').astype('float')
 
+        # import pdb; pdb.set_trace()
+        # to_stack_all = self.data_dict['all_data'].T[self.data_dict['all_data_16s'].index.values]
+        # to_stack_1 = self.data_dict['week_one'].T[self.data_dict['week_one_16s'].index.values]
+        # self.data_dict['all_data_ALL'] = np.vstack((to_stack_all, self.data_dict['all_data_16s'].T))
+        # self.data_dict['week_one_ALL'] = np.vstack(
+        #     (to_stack_1, self.data_dict['week_one_16s'].T))
         self.new_info_dict = new_info_dict
         self.new_info_dict2 = new_info_dict
         self.path = 'figs/'
@@ -299,16 +355,18 @@ class mlMethods():
     def split_test_train(self, data, labels, perc=.8):
 
         if isinstance(data.index.values[0], str):
-            patients = [int(i.split('-')[1]) for i in data.index.values]
+            patients = [int(i.split('-')[0]) for i in data.index.values]
             pdict = {}
             for i,pt in enumerate(patients):
                 pdict[pt] = labels[i]
             recur_pts = [pt for pt in pdict.keys() if pdict[pt] == 1]
             cleared_pts = [pt for pt in pdict.keys() if pdict[pt]==0]
 
+
+
             ixtrain0 = np.concatenate(
-                (np.random.choice(recur_pts, np.int(len(c1)*perc), replace=False),
-                 np.random.choice(cleared_pts, np.int(len(c1)*perc), replace=False)))
+                (np.random.choice(recur_pts, np.int(len(recur_pts)*perc), replace=False),
+                 np.random.choice(cleared_pts, np.int(len(cleared_pts)*perc), replace=False)))
             ixtest0 = np.array(list(set(pdict.keys())- set(ixtrain)))
 
             ixtrain = np.concatenate([np.where(patients == i)[0] for i in ixtrain0])
@@ -597,8 +655,9 @@ class mlMethods():
     # @profile
     def leave_one_out_cv(self, data, labels, num_folds = None):
 
-        if isinstance(data.index.values[0], str):
-            patients = np.array([int(i.split('-')[1]) for i in data.index.values])
+        if data.shape[0]>70:
+            # import pdb; pdb.set_trace()
+            patients = np.array([int(i.split('-')[0]) for i in data.index.values])
             pdict = {}
             for i, pt in enumerate(patients):
                 pdict[pt] = labels[i]
@@ -689,7 +748,7 @@ class mlMethods():
         
         loss.backward()
         optimizer.step()
-        return out
+        return out, loss
     
     def test_loop(self,net, X_test, y_test, criterion):
         net.eval()
@@ -711,7 +770,7 @@ class mlMethods():
         return test_out, test_loss, y_guess
 
     # @profile
-    def train_net(self, epochs, labels, data, loo_inner = True, loo_outer = True, folds = 3, regularizer = None, weighting = True, lambda_grid=None, train_inner = True, optimization = 'auc', perc = None, ixs = None):
+    def train_net(self, epochs, labels, data, loo_inner = True, loo_outer = True, folds = 3, regularizer = None, weighting = True, lambda_grid=None, train_inner = True, optimization = 'auc', perc = None, ixs = None, lrate = .001):
         # Inputs:
             # NNet - net to use (uninitialized)
             # epochs - number of epochs for training inner and outer loop
@@ -759,7 +818,7 @@ class mlMethods():
 
         # initialize net with TRAIN shape
         net = LogRegNet(TRAIN.shape[1])
-        optimizer = torch.optim.RMSprop(net.parameters(), lr=.0001)
+        optimizer = torch.optim.RMSprop(net.parameters(), lr=lrate)
 
         # if we are doing an inner cv:
         if regularizer is not None and train_inner:
